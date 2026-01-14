@@ -325,14 +325,17 @@ public partial class WeaponModelsConfig
     {
         var defaultJson = @"{
   ""Weapons"": {
-    ""example_collection"": {
+    ""Example Collection"": {
       ""image"": ""example.png"",
       ""name"": ""Example Collection"",
       ""weapon_ak47"": {
-        ""name"": ""AK-47 Example"",
-        ""uniqueid"": ""ak47_example"",
-        ""model"": ""weapons/models/example/ak47_example.vmdl"",
-        ""image_gun"": ""ak47_example.png""
+        ""AK-47 Example"": {
+          ""name"": ""AK-47 Example"",
+          ""uniqueid"": ""ak47_example"",
+          ""subclass"": ""weapon_ak47__example"",
+          ""model"": ""weapons/models/example/ak47_example.vmdl"",
+          ""image_gun"": ""ak47_example.png""
+        }
       }
     }
   }
@@ -462,6 +465,9 @@ public class WeaponModelData
     [JsonPropertyName("model")]
     public string Model { get; set; } = "";
 
+    [JsonPropertyName("subclass")]
+    public string Subclass { get; set; } = "";  // AG2 subclass name (e.g., "weapon_awp+1001")
+
     [JsonPropertyName("image_gun")]
     public string ImageGun { get; set; } = "";
 
@@ -474,16 +480,20 @@ public class WeaponModelData
     public string SkinKey { get; set; } = "";
 
     /// <summary>
-    /// Extracts the subclass name from the model path.
-    /// Example: "phase2/weapons/models/2en0w/ak47_zaomeng/ak47_zaomeng_ag2.vmdl" => "ak47_zaomeng_ag2"
+    /// Gets the subclass name for ChangeSubclass.
+    /// Returns explicit Subclass if set, otherwise falls back to model filename.
     /// </summary>
     public string GetSubclassName()
     {
+        // Prefer explicit subclass if set
+        if (!string.IsNullOrEmpty(Subclass))
+            return Subclass;
+
+        // Fallback to model filename
         if (string.IsNullOrEmpty(Model))
             return "";
 
-        var fileName = Path.GetFileNameWithoutExtension(Model);
-        return fileName;
+        return Path.GetFileNameWithoutExtension(Model);
     }
 }
 

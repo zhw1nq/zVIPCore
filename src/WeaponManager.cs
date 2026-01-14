@@ -20,10 +20,25 @@ public class WeaponManager
         _modelsConfig = config;
     }
 
-    public void PrecacheModels(WeaponModelsConfig models)
+    public void PrecacheModels()
     {
-        // No precaching needed for subclass-based weapon changes
-        // Subclasses are already defined in game files
+        foreach (var collection in _modelsConfig.Weapons.Values)
+        {
+            foreach (var skins in collection.WeaponItems.Values)
+            {
+                foreach (var weapon in skins)
+                {
+                    if (!string.IsNullOrEmpty(weapon.Model))
+                    {
+                        try
+                        {
+                            Server.PrecacheModel(weapon.Model);
+                        }
+                        catch { /* Model may already be precached by addon */ }
+                    }
+                }
+            }
+        }
     }
 
     public void OnEntityCreated(CEntityInstance entity)
@@ -73,10 +88,21 @@ public class WeaponManager
             if (modelData != null)
             {
                 var subclass = modelData.GetSubclassName();
+                Server.PrintToConsole($"[zModelsCustom] DEBUG: weapon={weaponDesignerName}, modelId={modelId}, subclass={subclass}, WeaponType={modelData.WeaponType}");
+                
                 if (!string.IsNullOrEmpty(subclass) && weaponDesignerName.Equals(modelData.WeaponType, StringComparison.Ordinal))
                 {
+                    Server.PrintToConsole($"[zModelsCustom] DEBUG: ChangeSubclass({weaponDesignerName} -> {subclass})");
                     SetSubclass(weapon, weaponDesignerName, subclass);
                 }
+                else
+                {
+                    Server.PrintToConsole($"[zModelsCustom] DEBUG: Skipped - WeaponType mismatch or empty subclass");
+                }
+            }
+            else
+            {
+                Server.PrintToConsole($"[zModelsCustom] DEBUG: modelData not found for modelId={modelId}");
             }
         }
         else

@@ -95,7 +95,7 @@ public class zModelsCustom : BasePlugin
             var newWeaponModels = WeaponModelsConfig.Load(ModuleDirectory);
             
             ModelManager.PrecacheModels(newPlayerModels);
-            WeaponManager.PrecacheModels(newWeaponModels);
+            WeaponManager.PrecacheModels();
             WeaponManager.UpdateModelsConfig(newWeaponModels);
 
             var playerCategoriesCount = newPlayerModels.Categories.Count;
@@ -847,7 +847,7 @@ public class zModelsCustom : BasePlugin
             var newWeaponModels = WeaponModelsConfig.Load(ModuleDirectory);
 
             ModelManager.PrecacheModels(newPlayerModels);
-            WeaponManager.PrecacheModels(newWeaponModels);
+            WeaponManager.PrecacheModels();
             WeaponManager.UpdateModelsConfig(newWeaponModels);
 
             // Clear player's cache and reload from DB
@@ -917,7 +917,7 @@ public class zModelsCustom : BasePlugin
                 var newWeaponModels = WeaponModelsConfig.Load(ModuleDirectory);
                 
                 ModelManager.PrecacheModels(newPlayerModels);
-                WeaponManager.PrecacheModels(newWeaponModels);
+                WeaponManager.PrecacheModels();
                 WeaponManager.UpdateModelsConfig(newWeaponModels);
 
                 var categoriesCount = newPlayerModels.Categories.Count;
