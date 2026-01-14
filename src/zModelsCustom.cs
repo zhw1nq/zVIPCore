@@ -3,6 +3,7 @@ using CounterStrikeSharp.API.Modules.Commands;
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Modules.Utils;
 using CounterStrikeSharp.API.Modules.Admin;
+using CounterStrikeSharp.API.Modules.UserMessages;
 using System.Collections.Concurrent;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -21,6 +22,7 @@ public class zModelsCustom : BasePlugin
     public static WeaponManager WeaponManager { get; private set; } = null!;
     public static SmokeManager SmokeManager { get; private set; } = null!;
     public static EffectsManager EffectsManager { get; private set; } = null!;
+    public static SoundManager SoundManager { get; private set; } = null!;
 
     private readonly ConcurrentDictionary<ulong, ReloadInfo> _reloadTracking = new();
 
@@ -34,21 +36,34 @@ public class zModelsCustom : BasePlugin
         SmokeManager = new SmokeManager();
         EffectsManager = new EffectsManager();
         EffectsManager.Initialize(ModuleDirectory);
+        
+        // Initialize SoundManager with weapon models config
+        var weaponModelsConfig = WeaponModelsConfig.Load(ModuleDirectory);
+        SoundManager = new SoundManager(weaponModelsConfig);
 
         // Player model events
         RegisterEventHandler<EventPlayerSpawn>(ModelManager.OnPlayerSpawn);
+        RegisterEventHandler<EventPlayerSpawn>(SoundManager.OnPlayerSpawn, HookMode.Post);
         
         // Weapon events
         RegisterListener<Listeners.OnEntityCreated>(OnEntityCreated);
         RegisterEventHandler<EventItemEquip>(WeaponManager.OnItemEquip);
+        RegisterEventHandler<EventWeaponFire>(SoundManager.OnWeaponFire, HookMode.Pre);
         
         // Common events
         RegisterEventHandler<EventPlayerConnectFull>(Database.OnPlayerConnectFull);
         RegisterEventHandler<EventPlayerDisconnect>(OnPlayerDisconnect);
+        RegisterEventHandler<EventPlayerDisconnect>(SoundManager.OnPlayerDisconnect, HookMode.Post);
         
         // Effects events (Trail/Tracer)
         RegisterListener<Listeners.OnTick>(EffectsManager.OnGameFrame);
         RegisterEventHandler<EventBulletImpact>(EffectsManager.OnBulletImpact);
+        
+        // Sound events
+        RegisterListener<Listeners.OnMapStart>(SoundManager.OnMapStart);
+        RegisterListener<Listeners.OnClientPutInServer>(SoundManager.OnClientPutInServer);
+        RegisterListener<Listeners.OnClientDisconnect>(SoundManager.OnClientDisconnect);
+        HookUserMessage(452, SoundManager.OnWeaponFireUserMessage, HookMode.Pre);
 
         RegisterCommands();
 
@@ -83,6 +98,9 @@ public class zModelsCustom : BasePlugin
         {
             AddCommand($"css_{cmd}", "Open models website", Command_ModelsWebsite);
         }
+
+        // Sound toggle command
+        AddCommand("css_zsound", "Toggle custom weapon sounds", SoundManager.OnToggleCustomSound);
     }
 
     [RequiresPermissions("@css/root")]

@@ -14,6 +14,7 @@ public class Database : IDisposable
     private readonly ConcurrentDictionary<ulong, string> _smokeCache = new();
     private readonly ConcurrentDictionary<ulong, string> _trailCache = new();
     private readonly ConcurrentDictionary<ulong, string> _tracerCache = new();
+    private readonly ConcurrentDictionary<ulong, bool> _soundEnabledCache = new();
     private bool _disposed;
 
     public Database(DatabaseConfig config)
@@ -88,6 +89,16 @@ public class Database : IDisposable
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4", conn);
 
         await cmd5.ExecuteNonQueryAsync();
+
+        // Create sound settings table
+        await using var cmd6 = new MySqlCommand(@"
+            CREATE TABLE IF NOT EXISTS zSoundSettings (
+                steamid BIGINT UNSIGNED PRIMARY KEY,
+                enabled TINYINT(1) NOT NULL DEFAULT 1,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4", conn);
+
+        await cmd6.ExecuteNonQueryAsync();
     }
 
     #region Player Models
@@ -469,6 +480,50 @@ public class Database : IDisposable
 
     #endregion
 
+    #region Sound Settings
+
+    public async Task<bool?> GetPlayerSoundEnabledAsync(ulong steamId)
+    {
+        if (_soundEnabledCache.TryGetValue(steamId, out var cached))
+            return cached;
+
+        await using var conn = new MySqlConnection(_connectionString);
+        await conn.OpenAsync();
+
+        await using var cmd = new MySqlCommand(
+            "SELECT enabled FROM zSoundSettings WHERE steamid = @steamid LIMIT 1", conn);
+        cmd.Parameters.AddWithValue("@steamid", steamId);
+
+        var result = await cmd.ExecuteScalarAsync();
+        if (result != null && result != DBNull.Value)
+        {
+            var enabled = Convert.ToBoolean(result);
+            _soundEnabledCache.TryAdd(steamId, enabled);
+            return enabled;
+        }
+        return null;
+    }
+
+    public async Task SavePlayerSoundEnabledAsync(ulong steamId, bool enabled)
+    {
+        _soundEnabledCache[steamId] = enabled;
+
+        await using var conn = new MySqlConnection(_connectionString);
+        await conn.OpenAsync();
+
+        await using var cmd = new MySqlCommand(@"
+            INSERT INTO zSoundSettings (steamid, enabled) VALUES (@steamid, @enabled)
+            ON DUPLICATE KEY UPDATE enabled = @enabled", conn);
+        cmd.Parameters.AddWithValue("@steamid", steamId);
+        cmd.Parameters.AddWithValue("@enabled", enabled ? 1 : 0);
+
+        await cmd.ExecuteNonQueryAsync();
+    }
+
+    private async Task PreloadPlayerSoundEnabledAsync(ulong steamId) => await GetPlayerSoundEnabledAsync(steamId);
+
+    #endregion
+
     #region Common
 
     public void ClearPlayerCache(ulong steamId)
@@ -490,6 +545,9 @@ public class Database : IDisposable
         // Clear trail/tracer cache
         _trailCache.TryRemove(steamId, out _);
         _tracerCache.TryRemove(steamId, out _);
+        
+        // Clear sound cache
+        _soundEnabledCache.TryRemove(steamId, out _);
     }
 
     public async Task PreloadAllPlayerDataAsync(ulong steamId)

@@ -19,5 +19,9 @@
     "zModelsCustom.website_message": "{green}Truy cập website: {yellow}{0}",
     "zModelsCustom.cooldown_remaining": "{darkred}Vui lòng đợi {yellow}{0}{darkred} giây trước khi reload.",
     "zModelsCustom.kick_reason_spam": "Spam lệnh",
-    "zModelsCustom.console_kick_spam": "Player {0} (SteamID: {1}) bị kick vì spam lệnh"
+    "zModelsCustom.console_kick_spam": "Player {0} (SteamID: {1}) bị kick vì spam lệnh",
+    "zModelsCustom.sound_enabled": "{green}Âm thanh vũ khí custom {yellow}đã bật{green}.",
+    "zModelsCustom.sound_disabled": "{yellow}Âm thanh vũ khí custom {red}đã tắt{yellow}.",
+    "zModelsCustom.web_smoke_applied": "{green}Đã áp dụng màu smoke {yellow}{0}",
+    "zModelsCustom.web_smoke_removed": "{green}Đã xóa màu smoke tùy chỉnh."
 }

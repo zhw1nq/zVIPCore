@@ -164,6 +164,15 @@ public class WeaponManager
         _playerWeapons.TryRemove(steamId, out _);
     }
 
+    public WeaponModelData? GetEquippedWeaponModel(ulong steamId, string weaponType)
+    {
+        if (!_playerWeapons.TryGetValue(steamId, out var weapons))
+            return null;
+        if (!weapons.TryGetValue(weaponType, out var modelId))
+            return null;
+        return _modelsConfig.FindModelByUniqueId(modelId);
+    }
+
     public void UpdatePlayerWeaponCache(ulong steamId, string weaponName, string? modelId)
     {
         var weapons = _playerWeapons.GetOrAdd(steamId, _ => new Dictionary<string, string>());

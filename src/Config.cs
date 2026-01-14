@@ -15,6 +15,9 @@ public partial class Config
     [JsonPropertyName("website_url")]
     public string WebsiteUrl { get; set; } = "https://example.com/models";
 
+    [JsonPropertyName("sound")]
+    public SoundConfig SoundConfig { get; set; } = new();
+
     public static Config Load(string moduleDirectory)
     {
         var path = GetConfigPath(moduleDirectory);
@@ -471,6 +474,12 @@ public class WeaponModelData
     [JsonPropertyName("image_gun")]
     public string ImageGun { get; set; } = "";
 
+    [JsonPropertyName("sound_event")]
+    public string SoundEvent { get; set; } = "";  // Custom fire sound event
+
+    [JsonPropertyName("sound_event_unsilenced")]
+    public string SoundEventUnsilenced { get; set; } = "";  // Optional unsilenced variant (M4A1-S/USP-S)
+
     // Set programmatically based on the JSON property name (weapon_ak47, etc.)
     [JsonIgnore]
     public string WeaponType { get; set; } = "";
@@ -711,3 +720,32 @@ public class TracerData
     [JsonPropertyName("acceptInputValue")]
     public string AcceptInputValue { get; set; } = "Start";
 }
+
+// Sound Config for weapon fire sound overrides
+public class SoundConfig
+{
+    [JsonPropertyName("enabled")]
+    public bool Enabled { get; set; } = true;
+
+    [JsonPropertyName("force_mute_all_firebullets")]
+    public bool ForceMuteAllFireBullets { get; set; } = false;
+
+    [JsonPropertyName("custom_sound_default_enabled")]
+    public bool CustomSoundDefaultEnabled { get; set; } = true;
+
+    [JsonPropertyName("official_overrides")]
+    public List<OfficialSoundOverride> OfficialOverrides { get; set; } = new();
+}
+
+public class OfficialSoundOverride
+{
+    [JsonPropertyName("item_def_index")]
+    public int ItemDefIndex { get; set; }
+
+    [JsonPropertyName("target_event")]
+    public string TargetEvent { get; set; } = "";
+
+    [JsonPropertyName("target_event_unsilenced")]
+    public string TargetEventUnsilenced { get; set; } = "";
+}
+
