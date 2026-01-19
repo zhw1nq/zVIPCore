@@ -44,6 +44,20 @@ public partial class Config
             WeaponModelsConfig.CreateDefault(weaponsPath);
         }
 
+        // Ensure trails config exists
+        var trailsPath = Path.Combine(configDir, "zTrails.json");
+        if (!File.Exists(trailsPath))
+        {
+            TrailsConfig.CreateDefault(trailsPath);
+        }
+
+        // Ensure tracers config exists  
+        var tracersPath = Path.Combine(configDir, "zTracers.json");
+        if (!File.Exists(tracersPath))
+        {
+            TracersConfig.CreateDefault(tracersPath);
+        }
+
         return config;
     }
 
@@ -545,7 +559,7 @@ public partial class TrailsConfig
     private static string GetConfigPath(string moduleDirectory) =>
         Path.Combine(moduleDirectory, "../../configs/plugins/zModelsCustom/zTrails.json");
 
-    private static TrailsConfig CreateDefault(string path)
+    public static TrailsConfig CreateDefault(string path)
     {
         var config = new TrailsConfig
         {
@@ -605,7 +619,6 @@ public partial class TrailsConfig
         return null;
     }
 }
-
 public class TrailData
 {
     [JsonPropertyName("uniqueid")]
@@ -673,7 +686,7 @@ public partial class TracersConfig
     private static string GetConfigPath(string moduleDirectory) =>
         Path.Combine(moduleDirectory, "../../configs/plugins/zModelsCustom/zTracers.json");
 
-    private static TracersConfig CreateDefault(string path)
+    public static TracersConfig CreateDefault(string path)
     {
         var config = new TracersConfig
         {

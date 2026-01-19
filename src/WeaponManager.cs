@@ -93,7 +93,7 @@ public class WeaponManager
                 if (!string.IsNullOrEmpty(subclass) && weaponDesignerName.Equals(modelData.WeaponType, StringComparison.Ordinal))
                 {
                     Server.PrintToConsole($"[zModelsCustom] DEBUG: ChangeSubclass({weaponDesignerName} -> {subclass})");
-                    SetSubclass(weapon, weaponDesignerName, subclass);
+                    SetSubclass(weapon, weaponDesignerName, subclass, modelData.Name);
                 }
                 else
                 {
@@ -142,7 +142,7 @@ public class WeaponManager
         {
             if (player.IsValid && weapon?.IsValid == true)
             {
-                SetSubclass(weapon, weaponName, subclass);
+                SetSubclass(weapon, weaponName, subclass, modelData.Name);
             }
         });
     }
@@ -205,7 +205,7 @@ public class WeaponManager
         };
     }
 
-    public static void SetSubclass(CBasePlayerWeapon weapon, string oldSubclass, string newSubclass)
+    public static void SetSubclass(CBasePlayerWeapon weapon, string oldSubclass, string newSubclass, string? customName = null)
     {
         if (string.IsNullOrEmpty(newSubclass))
             return;
@@ -213,6 +213,12 @@ public class WeaponManager
         var handle = weapon.Handle;
         OldSubclassByHandle[handle] = oldSubclass;
         weapon.AcceptInput("ChangeSubclass", weapon, weapon, newSubclass);
+        
+        // Set custom name (nametag) if provided
+        if (!string.IsNullOrEmpty(customName))
+        {
+            weapon.AttributeManager.Item.CustomName = customName;
+        }
     }
 
     public static void ResetSubclass(CBasePlayerWeapon weapon)
@@ -252,7 +258,7 @@ public class WeaponManager
         {
             if (isEquip)
             {
-                SetSubclass(weapon, item.WeaponType, subclass);
+                SetSubclass(weapon, item.WeaponType, subclass, item.Name);
             }
             else
             {
@@ -295,7 +301,7 @@ public class WeaponManager
             return;
         }
 
-        SetSubclass(activeWeapon, modelData.WeaponType, subclass);
+        SetSubclass(activeWeapon, modelData.WeaponType, subclass, modelData.Name);
 
         // Reset after 3 seconds
         zModelsCustom.Instance.AddTimer(3.0f, () =>
