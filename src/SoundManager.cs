@@ -182,7 +182,7 @@ public class SoundManager
 
         if (forceMute || customRecipients != null || officialRecipients != null)
         {
-            userMessage.Recipients.Clear();
+            userMessage.Recipients?.Clear();
         }
 
         return HookResult.Continue;
@@ -260,10 +260,10 @@ public class SoundManager
 
         // Get the weapon type from WeaponManager
         var weaponType = WeaponManager.GetDesignerName(weapon);
-        
+
         // Try to find custom weapon sound from player's equipped weapon
         var modelData = zModelsCustom.WeaponManager.GetEquippedWeaponModel(player.SteamID, weaponType);
-        
+
         if (modelData != null && !string.IsNullOrWhiteSpace(modelData.SoundEvent))
         {
             // Player has a custom weapon equipped with sound override
@@ -327,7 +327,7 @@ public class SoundManager
         _ = SaveCustomSoundSettingAsync(player.SteamID, enabled);
 
         var prefix = zModelsCustom.Instance.Localizer["zModelsCustom.prefix"];
-        var message = enabled 
+        var message = enabled
             ? zModelsCustom.Instance.Localizer["zModelsCustom.sound_enabled"]
             : zModelsCustom.Instance.Localizer["zModelsCustom.sound_disabled"];
         player.PrintToChat($"{prefix} {message}");

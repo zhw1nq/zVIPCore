@@ -15,15 +15,15 @@ public class EffectsManager
     // Player data - cleaned on disconnect
     private readonly ConcurrentDictionary<ulong, string> _playerTrails = new();
     private readonly ConcurrentDictionary<ulong, string> _playerTracers = new();
-    
+
     // Position tracking - cleaned on disconnect
     private readonly ConcurrentDictionary<int, Vector> _lastPosition = new();
     private readonly ConcurrentDictionary<int, Vector> _endPosition = new();
-    
+
     // Config references
     private TrailsConfig? _trailsConfig;
     private TracersConfig? _tracersConfig;
-    
+
     // Constants
     private const float MIN_MOVE_DISTANCE = 5.0f;
     private static readonly Random _random = new();
@@ -54,7 +54,7 @@ public class EffectsManager
         {
             if (!IsValidPlayer(player)) continue;
             if (!_playerTrails.TryGetValue(player.SteamID, out var trailId)) continue;
-            
+
             var trailData = _trailsConfig.FindByUniqueId(trailId);
             if (trailData != null)
                 ProcessTrail(player, trailData);
@@ -110,7 +110,7 @@ public class EffectsManager
         var beam = Utilities.CreateEntityByName<CBeam>("env_beam");
         if (beam == null) return;
 
-        beam.RenderMode = RenderMode_t.kRenderTransColor;
+        beam.RenderMode = (RenderMode_t)1; // kRenderTransColor
         beam.Width = trail.WidthValue;
         beam.Render = ParseColor(trail.Color);
         beam.Teleport(origin, new QAngle(), new Vector());
@@ -196,15 +196,15 @@ public class EffectsManager
         player?.IsBot == false && player.IsValid && player.PawnIsAlive;
 
     private static Vector? GetPlayerOrigin(CCSPlayerController player) =>
-        player.PlayerPawn.Value?.AbsOrigin is { } pos 
-            ? new Vector(pos.X, pos.Y, pos.Z) 
+        player.PlayerPawn.Value?.AbsOrigin is { } pos
+            ? new Vector(pos.X, pos.Y, pos.Z)
             : null;
 
     private static Vector GetEyePosition(CCSPlayerController player)
     {
         var origin = player.PlayerPawn.Value?.AbsOrigin;
-        return origin != null 
-            ? new Vector(origin.X, origin.Y, origin.Z + 64.0f) 
+        return origin != null
+            ? new Vector(origin.X, origin.Y, origin.Z + 64.0f)
             : new Vector();
     }
 
