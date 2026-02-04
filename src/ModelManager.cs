@@ -10,7 +10,7 @@ public class ModelManager
 {
     private static readonly Color LegDisabledColor = Color.FromArgb(254, 255, 255, 255);
     private static readonly Color DefaultColor = Color.FromArgb(255, 255, 255, 255);
-    
+
     private static readonly IReadOnlyDictionary<CsTeam, string> DefaultModels = new Dictionary<CsTeam, string>
     {
         { CsTeam.CounterTerrorist, "characters/models/ctm_sas/ctm_sas.vmdl" },
@@ -31,7 +31,6 @@ public class ModelManager
             if (!IsValidPlayer(player)) return;
 
             pawn.SetModel(model.Model);
-            Utilities.SetStateChanged(pawn, "CBaseModelEntity", "m_CRenderComponent");
             pawn.Render = model.DisableLeg ? LegDisabledColor : DefaultColor;
         });
     }
@@ -42,13 +41,12 @@ public class ModelManager
         if (!DefaultModels.TryGetValue(player.Team, out var defaultModel)) return;
 
         var pawn = player.PlayerPawn.Value!;
-        
+
         Server.NextFrame(() =>
         {
             if (!IsValidPlayer(player)) return;
 
             pawn.SetModel(defaultModel);
-            Utilities.SetStateChanged(pawn, "CBaseModelEntity", "m_CRenderComponent");
             pawn.Render = DefaultColor;
         });
     }
@@ -149,8 +147,8 @@ public class ModelManager
     {
         var radYaw = angles.Y * (MathF.PI / 180.0f);
         return position + new Vector(
-            MathF.Cos(radYaw) * distance, 
-            MathF.Sin(radYaw) * distance, 
+            MathF.Cos(radYaw) * distance,
+            MathF.Sin(radYaw) * distance,
             0
         );
     }
@@ -171,14 +169,14 @@ public class ModelManager
     private async Task LoadAndApplyModelAsync(CCSPlayerController player, ulong steamId, CsTeam team)
     {
         var modelId = await zModelsCustom.Database.GetPlayerModelAsync(steamId, team);
-        
+
         if (modelId == null)
         {
             return;
         }
 
         var model = PlayerModelsConfig.Load(zModelsCustom.Instance.ModuleDirectory).FindModelByUniqueId(modelId);
-        
+
         if (model == null)
         {
             await zModelsCustom.Database.RemovePlayerModelAsync(steamId, team);
@@ -210,7 +208,7 @@ public class ModelManager
     private async Task HandleInvalidSlot(CCSPlayerController player, ulong steamId, CsTeam team, string slot)
     {
         await zModelsCustom.Database.RemovePlayerModelAsync(steamId, team);
-        
+
         Server.NextFrame(() =>
         {
             if (IsValidPlayer(player))
@@ -241,7 +239,7 @@ public class ModelManager
         foreach (var model in models.Categories.Values.SelectMany(c => c.Values))
         {
             Server.PrecacheModel(model.Model);
-            
+
             if (!string.IsNullOrEmpty(model.ArmModel))
                 Server.PrecacheModel(model.ArmModel);
         }
