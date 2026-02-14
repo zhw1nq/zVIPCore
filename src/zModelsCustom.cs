@@ -36,7 +36,7 @@ public class zModelsCustom : BasePlugin
         SmokeManager = new SmokeManager();
         EffectsManager = new EffectsManager();
         EffectsManager.Initialize(ModuleDirectory);
-        
+
         // Initialize SoundManager with weapon models config
         var weaponModelsConfig = WeaponModelsConfig.Load(ModuleDirectory);
         SoundManager = new SoundManager(weaponModelsConfig);
@@ -44,21 +44,21 @@ public class zModelsCustom : BasePlugin
         // Player model events
         RegisterEventHandler<EventPlayerSpawn>(ModelManager.OnPlayerSpawn);
         RegisterEventHandler<EventPlayerSpawn>(SoundManager.OnPlayerSpawn, HookMode.Post);
-        
+
         // Weapon events
         RegisterListener<Listeners.OnEntityCreated>(OnEntityCreated);
         RegisterEventHandler<EventItemEquip>(WeaponManager.OnItemEquip);
         RegisterEventHandler<EventWeaponFire>(SoundManager.OnWeaponFire, HookMode.Pre);
-        
+
         // Common events
         RegisterEventHandler<EventPlayerConnectFull>(Database.OnPlayerConnectFull);
         RegisterEventHandler<EventPlayerDisconnect>(OnPlayerDisconnect);
         RegisterEventHandler<EventPlayerDisconnect>(SoundManager.OnPlayerDisconnect, HookMode.Post);
-        
-        // Effects events (Trail/Tracer)
-        RegisterListener<Listeners.OnTick>(EffectsManager.OnGameFrame);
-        RegisterEventHandler<EventBulletImpact>(EffectsManager.OnBulletImpact);
-        
+
+        // DISABLED: Effects events (Trail/Tracer)
+        // RegisterListener<Listeners.OnTick>(EffectsManager.OnGameFrame);
+        // RegisterEventHandler<EventBulletImpact>(EffectsManager.OnBulletImpact);
+
         // Sound events
         RegisterListener<Listeners.OnMapStart>(SoundManager.OnMapStart);
         RegisterListener<Listeners.OnClientPutInServer>(SoundManager.OnClientPutInServer);
@@ -111,7 +111,7 @@ public class zModelsCustom : BasePlugin
             // Reload configs
             var newPlayerModels = PlayerModelsConfig.Load(ModuleDirectory);
             var newWeaponModels = WeaponModelsConfig.Load(ModuleDirectory);
-            
+
             ModelManager.PrecacheModels(newPlayerModels);
             WeaponManager.PrecacheModels();
             WeaponManager.UpdateModelsConfig(newWeaponModels);
@@ -140,7 +140,7 @@ public class zModelsCustom : BasePlugin
                 }
             }
 
-            var successMessage = Localizer["zModelsCustom.reload_success", 
+            var successMessage = Localizer["zModelsCustom.reload_success",
                 playerCategoriesCount, playerTotalModels, weaponCount, weaponTotalModels];
 
             if (player?.IsValid == true)
@@ -217,6 +217,8 @@ public class zModelsCustom : BasePlugin
                 _ = ProcessSmokeWebQuery(steamId, uniqueId);
                 break;
 
+            // DISABLED: Trail and Tracer modules
+            /*
             case "trail":
                 _ = ProcessTrailWebQuery(steamId, uniqueId);
                 break;
@@ -224,9 +226,10 @@ public class zModelsCustom : BasePlugin
             case "tracer":
                 _ = ProcessTracerWebQuery(steamId, uniqueId);
                 break;
+            */
 
             default:
-                Server.PrintToConsole($"[zModelsCustom] Invalid type: {type}. Must be 'model', 'weapon', 'smoke', 'trail', or 'tracer'");
+                Server.PrintToConsole($"[zModelsCustom] Invalid type: {type}. Must be 'model', 'weapon', or 'smoke'");
                 break;
         }
     }
@@ -469,7 +472,7 @@ public class zModelsCustom : BasePlugin
     {
         // Route to WeaponManager for weapon entities
         WeaponManager.OnEntityCreated(entity);
-        
+
         // Route to SmokeManager for smoke grenades
         SmokeManager.OnEntityCreated(entity);
     }
@@ -608,6 +611,8 @@ public class zModelsCustom : BasePlugin
                 _ = ProcessSmokeWebDelete(steamId);
                 break;
 
+            // DISABLED: Trail and Tracer modules
+            /*
             case "trail":
                 _ = ProcessTrailWebDelete(steamId);
                 break;
@@ -615,9 +620,10 @@ public class zModelsCustom : BasePlugin
             case "tracer":
                 _ = ProcessTracerWebDelete(steamId);
                 break;
+            */
 
             default:
-                Server.PrintToConsole($"[zModelsCustom] Invalid type: {type}. Must be 'model', 'weapon', 'smoke', 'trail', or 'tracer'");
+                Server.PrintToConsole($"[zModelsCustom] Invalid type: {type}. Must be 'model', 'weapon', or 'smoke'");
                 break;
         }
     }
@@ -933,7 +939,7 @@ public class zModelsCustom : BasePlugin
             {
                 var newPlayerModels = PlayerModelsConfig.Load(ModuleDirectory);
                 var newWeaponModels = WeaponModelsConfig.Load(ModuleDirectory);
-                
+
                 ModelManager.PrecacheModels(newPlayerModels);
                 WeaponManager.PrecacheModels();
                 WeaponManager.UpdateModelsConfig(newWeaponModels);

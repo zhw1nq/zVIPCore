@@ -48,6 +48,9 @@ public class EffectsManager
 
     public void OnGameFrame()
     {
+        // DISABLED: Trail processing
+        return;
+        /*
         if (_trailsConfig == null) return;
 
         foreach (var player in Utilities.GetPlayers())
@@ -59,6 +62,7 @@ public class EffectsManager
             if (trailData != null)
                 ProcessTrail(player, trailData);
         }
+        */
     }
 
     private void ProcessTrail(CCSPlayerController player, TrailData trail)
@@ -130,6 +134,9 @@ public class EffectsManager
 
     public HookResult OnBulletImpact(EventBulletImpact @event, GameEventInfo info)
     {
+        // DISABLED: Tracer processing
+        return HookResult.Continue;
+        /*
         if (_tracersConfig == null) return HookResult.Continue;
 
         var player = @event.Userid;
@@ -141,6 +148,7 @@ public class EffectsManager
             SpawnTracer(player, @event.X, @event.Y, @event.Z, tracerData);
 
         return HookResult.Continue;
+        */
     }
 
     private void SpawnTracer(CCSPlayerController player, float x, float y, float z, TracerData tracer)
