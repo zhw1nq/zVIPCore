@@ -24,7 +24,8 @@ public class Database : IDisposable
                           $"Pooling=true;MinimumPoolSize=2;MaximumPoolSize=20;" +
                           $"ConnectionTimeout=30;DefaultCommandTimeout=30;";
 
-        InitializeDatabaseAsync().GetAwaiter().GetResult();
+        // Use Task.Run to avoid deadlock from sync-over-async
+        Task.Run(() => InitializeDatabaseAsync()).GetAwaiter().GetResult();
     }
 
     private async Task InitializeDatabaseAsync()
@@ -541,11 +542,11 @@ public class Database : IDisposable
 
         // Clear smoke cache
         _smokeCache.TryRemove(steamId, out _);
-        
+
         // Clear trail/tracer cache
         _trailCache.TryRemove(steamId, out _);
         _tracerCache.TryRemove(steamId, out _);
-        
+
         // Clear sound cache
         _soundEnabledCache.TryRemove(steamId, out _);
     }
@@ -559,7 +560,8 @@ public class Database : IDisposable
             PreloadPlayerWeaponsAsync(steamId),
             PreloadPlayerSmokeColorAsync(steamId),
             PreloadPlayerTrailAsync(steamId),
-            PreloadPlayerTracerAsync(steamId)
+            PreloadPlayerTracerAsync(steamId),
+            PreloadPlayerSoundEnabledAsync(steamId)
         );
     }
 
@@ -568,7 +570,7 @@ public class Database : IDisposable
         var player = @event.Userid;
         if (player?.IsBot != false) return HookResult.Continue;
 
-        _ = PreloadAllPlayerDataAsync(player.SteamID);
+        _ = zModelsCustom.SafeAsync(() => PreloadAllPlayerDataAsync(player.SteamID));
 
         return HookResult.Continue;
     }
@@ -582,6 +584,7 @@ public class Database : IDisposable
         _smokeCache.Clear();
         _trailCache.Clear();
         _tracerCache.Clear();
+        _soundEnabledCache.Clear();
         MySqlConnection.ClearAllPools();
 
         _disposed = true;

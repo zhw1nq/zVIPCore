@@ -10,7 +10,6 @@ namespace zModelsCustom;
 
 public class SoundManager
 {
-    private readonly WeaponModelsConfig _modelsConfig;
     private readonly PlayerPawnCache _pawnCache = new();
     private readonly FireSoundCache _fireSoundCache = new(MaxPlayerSlots);
     private readonly bool[] _customSoundEnabledBySlot = new bool[MaxPlayerSlots];
@@ -23,13 +22,12 @@ public class SoundManager
     private const int EntityIndexMask = 0x3FFF;
     private const long FireCacheTtlMs = 1500;
 
-    public SoundManager(WeaponModelsConfig modelsConfig)
+    public SoundManager()
     {
-        _modelsConfig = modelsConfig;
         RebuildOfficialOverrides();
     }
 
-    public void UpdateModelsConfig(WeaponModelsConfig config)
+    public void UpdateModelsConfig()
     {
         // Rebuild sound mappings when config is reloaded
         RebuildOfficialOverrides();
@@ -200,14 +198,7 @@ public class SoundManager
 
     public HookResult OnPlayerDisconnect(EventPlayerDisconnect @event, GameEventInfo info)
     {
-        var player = @event.Userid;
-        if (player != null)
-        {
-            _fireSoundCache.Clear(player.Slot);
-            _pawnCache.Remove(player);
-            ClearCustomSoundEnabledForPlayer(player);
-            RemoveCustomSoundEnabled(player.SteamID);
-        }
+        // Cleanup handled by OnClientDisconnect to avoid duplicate work
         return HookResult.Continue;
     }
 
@@ -233,7 +224,7 @@ public class SoundManager
         SetCustomSoundEnabledForPlayer(player, soundConfig?.CustomSoundDefaultEnabled ?? true);
         _pawnCache.Update(player);
 
-        _ = LoadCustomSoundSettingAsync(player.SteamID);
+        _ = zModelsCustom.SafeAsync(() => LoadCustomSoundSettingAsync(player.SteamID));
     }
 
     public void OnClientDisconnect(int playerSlot)
@@ -242,6 +233,7 @@ public class SoundManager
         if (player == null || !player.IsValid)
             return;
 
+        _fireSoundCache.Clear(playerSlot);
         _pawnCache.Remove(player);
         ClearCustomSoundEnabledForPlayer(player);
         RemoveCustomSoundEnabled(player.SteamID);
@@ -324,7 +316,7 @@ public class SoundManager
 
         var enabled = !IsCustomSoundEnabled(player);
         SetCustomSoundEnabledForPlayer(player, enabled);
-        _ = SaveCustomSoundSettingAsync(player.SteamID, enabled);
+        _ = zModelsCustom.SafeAsync(() => SaveCustomSoundSettingAsync(player.SteamID, enabled));
 
         var prefix = zModelsCustom.Instance.Localizer["zModelsCustom.prefix"];
         var message = enabled
@@ -418,7 +410,7 @@ public class SoundManager
             if (IsValidSlot(player.Slot))
                 _customSoundEnabledBySlot[player.Slot] = GetCustomSoundEnabled(player.SteamID);
 
-            _ = LoadCustomSoundSettingAsync(player.SteamID);
+            _ = zModelsCustom.SafeAsync(() => LoadCustomSoundSettingAsync(player.SteamID));
         }
     }
 

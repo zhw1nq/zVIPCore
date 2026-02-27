@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
+using CounterStrikeSharp.API;
 
 namespace zModelsCustom;
 
@@ -70,7 +71,7 @@ public partial class Config
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[zModelsCustom] Error loading config: {ex.Message}");
+            Server.PrintToConsole($"[zModelsCustom] Error loading config: {ex.Message}");
             return new Config();
         }
     }
@@ -90,7 +91,7 @@ public partial class Config
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[zModelsCustom] Error creating default config: {ex.Message}");
+            Server.PrintToConsole($"[zModelsCustom] Error creating default config: {ex.Message}");
         }
 
         return defaultConfig;
@@ -124,7 +125,7 @@ public partial class PlayerModelsConfig
         PropertyNameCaseInsensitive = true
     };
 
-    [GeneratedRegex(@"//.*|/\*[\s\S]*?\*/", RegexOptions.Compiled)]
+    [GeneratedRegex(@"(?<=^|\s)//.*|/\*[\s\S]*?\*/", RegexOptions.Compiled | RegexOptions.Multiline)]
     private static partial Regex CommentPattern();
 
     [JsonPropertyName("Categories")]
@@ -149,7 +150,7 @@ public partial class PlayerModelsConfig
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[zModelsCustom] Error loading player models: {ex.Message}");
+            Server.PrintToConsole($"[zModelsCustom] Error loading player models: {ex.Message}");
             return new PlayerModelsConfig();
         }
     }
@@ -184,7 +185,7 @@ public partial class PlayerModelsConfig
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[zModelsCustom] Error creating default player models: {ex.Message}");
+            Server.PrintToConsole($"[zModelsCustom] Error creating default player models: {ex.Message}");
         }
 
         return defaultModels;
@@ -285,7 +286,7 @@ public partial class WeaponModelsConfig
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[zModelsCustom] Error loading weapon models: {ex.Message}");
+            Server.PrintToConsole($"[zModelsCustom] Error loading weapon models: {ex.Message}");
             return new WeaponModelsConfig();
         }
     }
@@ -365,7 +366,7 @@ public partial class WeaponModelsConfig
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[zModelsCustom] Error creating default weapon models: {ex.Message}");
+            Server.PrintToConsole($"[zModelsCustom] Error creating default weapon models: {ex.Message}");
         }
 
         return new WeaponModelsConfig();
@@ -551,7 +552,7 @@ public partial class TrailsConfig
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[zModelsCustom] Error loading trails config: {ex.Message}");
+            Server.PrintToConsole($"[zModelsCustom] Error loading trails config: {ex.Message}");
             return new TrailsConfig();
         }
     }
@@ -600,7 +601,7 @@ public partial class TrailsConfig
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[zModelsCustom] Error creating default trails config: {ex.Message}");
+            Server.PrintToConsole($"[zModelsCustom] Error creating default trails config: {ex.Message}");
         }
 
         return config;
@@ -678,7 +679,7 @@ public partial class TracersConfig
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[zModelsCustom] Error loading tracers config: {ex.Message}");
+            Server.PrintToConsole($"[zModelsCustom] Error loading tracers config: {ex.Message}");
             return new TracersConfig();
         }
     }
@@ -709,7 +710,7 @@ public partial class TracersConfig
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[zModelsCustom] Error creating default tracers config: {ex.Message}");
+            Server.PrintToConsole($"[zModelsCustom] Error creating default tracers config: {ex.Message}");
         }
 
         return config;

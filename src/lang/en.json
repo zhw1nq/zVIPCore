@@ -15,7 +15,6 @@
   "zModelsCustom.web_login_success": "{green}Successfully logged in via web!",
   "zModelsCustom.web_login_time": " {gray}Time: {yellow}{0}",
   "zModelsCustom.web_login_location": " {gray}Location: {yellow}{0}, {1}",
-  "zModelsCustom.web_login_domain": " {gray}Domain: {yellow}{0}",
   "zModelsCustom.website_message": "{green}Visit our website: {yellow}{0}",
   "zModelsCustom.cooldown_remaining": "{darkred}Please wait {yellow}{0}{darkred} seconds before reloading again.",
   "zModelsCustom.kick_reason_spam": "Command spam detected",
@@ -23,5 +22,6 @@
   "zModelsCustom.sound_enabled": "{green}Custom weapon sounds {yellow}enabled{green}.",
   "zModelsCustom.sound_disabled": "{yellow}Custom weapon sounds {red}disabled{yellow}.",
   "zModelsCustom.web_smoke_applied": "{green}Applied smoke color {yellow}{0}",
-  "zModelsCustom.web_smoke_removed": "{green}Removed custom smoke color."
+  "zModelsCustom.web_smoke_removed": "{green}Removed custom smoke color.",
+  "zModelsCustom.web_reload_success": "{green}Configuration reloaded successfully."
 }

@@ -7,8 +7,8 @@ namespace zModelsCustom;
 public class WeaponManager
 {
     private WeaponModelsConfig _modelsConfig = new();
-    private readonly ConcurrentDictionary<ulong, Dictionary<string, string>> _playerWeapons = new();
-    private static readonly Dictionary<nint, string> OldSubclassByHandle = new();
+    private readonly ConcurrentDictionary<ulong, ConcurrentDictionary<string, string>> _playerWeapons = new();
+    private static readonly ConcurrentDictionary<nint, string> OldSubclassByHandle = new();
 
     public WeaponManager()
     {
@@ -88,27 +88,16 @@ public class WeaponManager
             if (modelData != null)
             {
                 var subclass = modelData.GetSubclassName();
-                Server.PrintToConsole($"[zModelsCustom] DEBUG: weapon={weaponDesignerName}, modelId={modelId}, subclass={subclass}, WeaponType={modelData.WeaponType}");
-                
                 if (!string.IsNullOrEmpty(subclass) && weaponDesignerName.Equals(modelData.WeaponType, StringComparison.Ordinal))
                 {
-                    Server.PrintToConsole($"[zModelsCustom] DEBUG: ChangeSubclass({weaponDesignerName} -> {subclass})");
                     SetSubclass(weapon, weaponDesignerName, subclass, modelData.Name);
                 }
-                else
-                {
-                    Server.PrintToConsole($"[zModelsCustom] DEBUG: Skipped - WeaponType mismatch or empty subclass");
-                }
-            }
-            else
-            {
-                Server.PrintToConsole($"[zModelsCustom] DEBUG: modelData not found for modelId={modelId}");
             }
         }
         else
         {
             // Load from database async
-            _ = LoadAndApplyWeaponSubclassAsync(steamId, player, weapon, weaponDesignerName);
+            _ = zModelsCustom.SafeAsync(() => LoadAndApplyWeaponSubclassAsync(steamId, player, weapon, weaponDesignerName));
         }
     }
 
@@ -120,7 +109,7 @@ public class WeaponManager
             return;
 
         // Cache the result
-        var weapons = _playerWeapons.GetOrAdd(steamId, _ => new Dictionary<string, string>());
+        var weapons = _playerWeapons.GetOrAdd(steamId, _ => new ConcurrentDictionary<string, string>());
         weapons[weaponName] = modelId;
 
         var modelData = _modelsConfig.FindModelByUniqueId(modelId);
@@ -175,11 +164,11 @@ public class WeaponManager
 
     public void UpdatePlayerWeaponCache(ulong steamId, string weaponName, string? modelId)
     {
-        var weapons = _playerWeapons.GetOrAdd(steamId, _ => new Dictionary<string, string>());
+        var weapons = _playerWeapons.GetOrAdd(steamId, _ => new ConcurrentDictionary<string, string>());
 
         if (modelId == null)
         {
-            weapons.Remove(weaponName);
+            weapons.TryRemove(weaponName, out _);
         }
         else
         {
@@ -212,8 +201,9 @@ public class WeaponManager
 
         var handle = weapon.Handle;
         OldSubclassByHandle[handle] = oldSubclass;
+        zModelsCustom.SoundManager?.TrackWeaponSubclass(weapon, newSubclass);
         weapon.AcceptInput("ChangeSubclass", weapon, weapon, newSubclass);
-        
+
         // Set custom name (nametag) if provided
         if (!string.IsNullOrEmpty(customName))
         {
@@ -228,7 +218,13 @@ public class WeaponManager
             return;
 
         weapon.AcceptInput("ChangeSubclass", weapon, weapon, oldSubclass);
-        OldSubclassByHandle.Remove(handle);
+        OldSubclassByHandle.TryRemove(handle, out _);
+        zModelsCustom.SoundManager?.UntrackWeaponSubclass(weapon);
+    }
+
+    public static void ClearSubclassCache()
+    {
+        OldSubclassByHandle.Clear();
     }
 
     private static CCSPlayerController? FindPlayerFromWeapon(CBasePlayerWeapon weapon)
@@ -238,79 +234,6 @@ public class WeaponManager
 
         CCSPlayerPawn? pawn = weapon.OwnerEntity.Value.As<CCSPlayerPawn>();
         return pawn?.OriginalController.Value;
-    }
-
-    #endregion
-
-    #region Equip/Unequip
-
-    public bool HandleEquip(CCSPlayerController player, WeaponModelData item, bool isEquip)
-    {
-        if (!player.PawnIsAlive)
-            return true;
-
-        var subclass = item.GetSubclassName();
-        if (string.IsNullOrEmpty(subclass) || string.IsNullOrEmpty(item.WeaponType))
-            return true;
-
-        CBasePlayerWeapon? weapon = GetPlayerWeapon(player, item.WeaponType);
-        if (weapon != null)
-        {
-            if (isEquip)
-            {
-                SetSubclass(weapon, item.WeaponType, subclass, item.Name);
-            }
-            else
-            {
-                ResetSubclass(weapon);
-            }
-        }
-
-        return true;
-    }
-
-    private static CBasePlayerWeapon? GetPlayerWeapon(CCSPlayerController player, string weaponName)
-    {
-        CPlayer_WeaponServices? weaponServices = player.PlayerPawn?.Value?.WeaponServices;
-        if (weaponServices == null)
-            return null;
-
-        CBasePlayerWeapon? activeWeapon = weaponServices.ActiveWeapon?.Value;
-        if (activeWeapon != null && GetDesignerName(activeWeapon) == weaponName)
-            return activeWeapon;
-
-        return weaponServices.MyWeapons.FirstOrDefault(p => p.Value != null && GetDesignerName(p.Value) == weaponName)?.Value;
-    }
-
-    #endregion
-
-    #region Inspect
-
-    public void Inspect(CCSPlayerController player, WeaponModelData modelData)
-    {
-        if (player.PlayerPawn.Value?.WeaponServices?.ActiveWeapon.Value is not CBasePlayerWeapon activeWeapon)
-            return;
-
-        var subclass = modelData.GetSubclassName();
-        if (string.IsNullOrEmpty(subclass) || string.IsNullOrEmpty(modelData.WeaponType))
-            return;
-
-        if (GetDesignerName(activeWeapon) != modelData.WeaponType)
-        {
-            player.PrintToChat($"You need to equip {modelData.WeaponType} first!");
-            return;
-        }
-
-        SetSubclass(activeWeapon, modelData.WeaponType, subclass, modelData.Name);
-
-        // Reset after 3 seconds
-        zModelsCustom.Instance.AddTimer(3.0f, () =>
-        {
-            if (player.IsValid && player.PlayerPawn.Value?.WeaponServices?.ActiveWeapon.Value == activeWeapon)
-            {
-                ResetSubclass(activeWeapon);
-            }
-        });
     }
 
     #endregion

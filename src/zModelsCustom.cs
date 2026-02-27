@@ -26,6 +26,21 @@ public class zModelsCustom : BasePlugin
 
     private readonly ConcurrentDictionary<ulong, ReloadInfo> _reloadTracking = new();
 
+    /// <summary>
+    /// Wraps an async action with try-catch to prevent silent exception swallowing.
+    /// </summary>
+    public static async Task SafeAsync(Func<Task> action)
+    {
+        try
+        {
+            await action();
+        }
+        catch (Exception ex)
+        {
+            Server.PrintToConsole($"[zModelsCustom] Async error: {ex.Message}\n{ex.StackTrace}");
+        }
+    }
+
     public override void Load(bool hotReload)
     {
         Instance = this;
@@ -37,9 +52,8 @@ public class zModelsCustom : BasePlugin
         EffectsManager = new EffectsManager();
         EffectsManager.Initialize(ModuleDirectory);
 
-        // Initialize SoundManager with weapon models config
-        var weaponModelsConfig = WeaponModelsConfig.Load(ModuleDirectory);
-        SoundManager = new SoundManager(weaponModelsConfig);
+        // Initialize SoundManager
+        SoundManager = new SoundManager();
 
         // Player model events
         RegisterEventHandler<EventPlayerSpawn>(ModelManager.OnPlayerSpawn);
@@ -67,13 +81,29 @@ public class zModelsCustom : BasePlugin
 
         RegisterCommands();
 
+        // Load configs and register map start for precaching
+        var initialWeaponModels = WeaponModelsConfig.Load(ModuleDirectory);
+        WeaponManager.UpdateModelsConfig(initialWeaponModels);
+        SoundManager.UpdateModelsConfig();
+
+        RegisterListener<Listeners.OnMapStart>(mapName =>
+        {
+            var playerModels = PlayerModelsConfig.Load(ModuleDirectory);
+            var weaponModels = WeaponModelsConfig.Load(ModuleDirectory);
+            ModelManager.PrecacheModels(playerModels);
+            WeaponManager.PrecacheModels();
+            WeaponManager.UpdateModelsConfig(weaponModels);
+            SoundManager.UpdateModelsConfig();
+            WeaponManager.ClearSubclassCache();
+        });
+
         if (hotReload)
         {
             foreach (var player in Utilities.GetPlayers())
             {
                 if (player?.IsBot == false && player.AuthorizedSteamID != null)
                 {
-                    _ = Database.PreloadAllPlayerDataAsync(player.SteamID);
+                    _ = SafeAsync(() => Database.PreloadAllPlayerDataAsync(player.SteamID));
                 }
             }
         }
@@ -115,6 +145,7 @@ public class zModelsCustom : BasePlugin
             ModelManager.PrecacheModels(newPlayerModels);
             WeaponManager.PrecacheModels();
             WeaponManager.UpdateModelsConfig(newWeaponModels);
+            SoundManager.UpdateModelsConfig();
 
             var playerCategoriesCount = newPlayerModels.Categories.Count;
             var playerTotalModels = newPlayerModels.Categories.Values.Sum(c => c.Count);
@@ -206,25 +237,25 @@ public class zModelsCustom : BasePlugin
                     Server.PrintToConsole($"[zModelsCustom] Invalid site: {target}. Must be 't', 'ct', or 'all'");
                     return;
                 }
-                _ = ProcessModelWebQuery(steamId, uniqueId, target);
+                _ = SafeAsync(() => ProcessModelWebQuery(steamId, uniqueId, target));
                 break;
 
             case "weapon":
-                _ = ProcessWeaponWebQuery(steamId, uniqueId);
+                _ = SafeAsync(() => ProcessWeaponWebQuery(steamId, uniqueId));
                 break;
 
             case "smoke":
-                _ = ProcessSmokeWebQuery(steamId, uniqueId);
+                _ = SafeAsync(() => ProcessSmokeWebQuery(steamId, uniqueId));
                 break;
 
             // DISABLED: Trail and Tracer modules
             /*
             case "trail":
-                _ = ProcessTrailWebQuery(steamId, uniqueId);
+                _ = SafeAsync(() => ProcessTrailWebQuery(steamId, uniqueId));
                 break;
 
             case "tracer":
-                _ = ProcessTracerWebQuery(steamId, uniqueId);
+                _ = SafeAsync(() => ProcessTracerWebQuery(steamId, uniqueId));
                 break;
             */
 
@@ -600,25 +631,25 @@ public class zModelsCustom : BasePlugin
                     Server.PrintToConsole($"[zModelsCustom] Invalid site: {target}. Must be 't', 'ct', or 'all'");
                     return;
                 }
-                _ = ProcessModelWebDelete(steamId, target);
+                _ = SafeAsync(() => ProcessModelWebDelete(steamId, target));
                 break;
 
             case "weapon":
-                _ = ProcessWeaponWebDelete(steamId, target);
+                _ = SafeAsync(() => ProcessWeaponWebDelete(steamId, target));
                 break;
 
             case "smoke":
-                _ = ProcessSmokeWebDelete(steamId);
+                _ = SafeAsync(() => ProcessSmokeWebDelete(steamId));
                 break;
 
             // DISABLED: Trail and Tracer modules
             /*
             case "trail":
-                _ = ProcessTrailWebDelete(steamId);
+                _ = SafeAsync(() => ProcessTrailWebDelete(steamId));
                 break;
 
             case "tracer":
-                _ = ProcessTracerWebDelete(steamId);
+                _ = SafeAsync(() => ProcessTracerWebDelete(steamId));
                 break;
             */
 
@@ -756,7 +787,7 @@ public class zModelsCustom : BasePlugin
                 .FirstOrDefault(p => p?.IsValid == true && p.SteamID == steamId);
 
             await Database.RemovePlayerSmokeColorAsync(steamId);
-            SmokeManager.RemovePlayerSmokeColor(steamId);
+            SmokeManager.ClearPlayerData(steamId);
 
             Server.NextFrame(() =>
             {
@@ -873,13 +904,14 @@ public class zModelsCustom : BasePlugin
             ModelManager.PrecacheModels(newPlayerModels);
             WeaponManager.PrecacheModels();
             WeaponManager.UpdateModelsConfig(newWeaponModels);
+            SoundManager.UpdateModelsConfig();
 
             // Clear player's cache and reload from DB
             Database.ClearPlayerCache(steamId);
             WeaponManager.ClearPlayerData(steamId);
 
             // Reload player data from DB
-            _ = Database.PreloadAllPlayerDataAsync(steamId);
+            _ = SafeAsync(() => Database.PreloadAllPlayerDataAsync(steamId));
 
             // Refresh player's weapons
             WeaponManager.RefreshPlayerWeapons(targetPlayer);
@@ -913,7 +945,7 @@ public class zModelsCustom : BasePlugin
             {
                 Server.PrintToConsole(Localizer["zModelsCustom.console_kick_spam",
                     player.PlayerName, steamId]);
-                Server.ExecuteCommand($"kickid {player.UserId} \"{Localizer["zModelsCustom.kick_reason_spam"]}\"");
+                Server.ExecuteCommand($"kickid {player.UserId} \"Command spam detected\"");
 
                 reloadInfo.CommandHistory.Clear();
                 return;
@@ -935,30 +967,22 @@ public class zModelsCustom : BasePlugin
 
             reloadInfo.LastReloadTime = currentTime;
 
-            try
+            // Only reload player DB data — changes apply next round
+            Database.ClearPlayerCache(steamId);
+            WeaponManager.ClearPlayerData(steamId);
+
+            _ = SafeAsync(async () =>
             {
-                var newPlayerModels = PlayerModelsConfig.Load(ModuleDirectory);
-                var newWeaponModels = WeaponModelsConfig.Load(ModuleDirectory);
-
-                ModelManager.PrecacheModels(newPlayerModels);
-                WeaponManager.PrecacheModels();
-                WeaponManager.UpdateModelsConfig(newWeaponModels);
-
-                var categoriesCount = newPlayerModels.Categories.Count;
-                var totalModels = newPlayerModels.Categories.Values.Sum(c => c.Count);
-
-                player.PrintToChat(Localizer["zModelsCustom.prefix"] +
-                    Localizer["zModelsCustom.reload_success_player", categoriesCount, totalModels]);
-
-                Server.PrintToConsole($"[zModelsCustom] Reload triggered by {player.PlayerName}");
-            }
-            catch (Exception ex)
-            {
-                player.PrintToChat(Localizer["zModelsCustom.prefix"] +
-                    Localizer["zModelsCustom.reload_error", ex.Message]);
-
-                Server.PrintToConsole($"[zModelsCustom] Error reloading: {ex.Message}");
-            }
+                await Database.PreloadAllPlayerDataAsync(steamId);
+                Server.NextFrame(() =>
+                {
+                    if (player.IsValid)
+                    {
+                        player.PrintToChat(Localizer["zModelsCustom.prefix"] +
+                            Localizer["zModelsCustom.web_reload_success"]);
+                    }
+                });
+            });
         }
     }
 
@@ -983,6 +1007,7 @@ public class zModelsCustom : BasePlugin
     public override void Unload(bool hotReload)
     {
         Database?.Dispose();
+        WeaponManager.ClearSubclassCache();
         _reloadTracking.Clear();
     }
 
@@ -1013,16 +1038,4 @@ public class WebLoginInfo
 
     [JsonPropertyName("t")]
     public string Time { get; set; } = "";
-}
-
-// Helper class for thread-safe HashSet
-public class ConcurrentHashSet<T> where T : notnull
-{
-    private readonly ConcurrentDictionary<T, byte> _dictionary = new();
-
-    public void Add(T item) => _dictionary.TryAdd(item, 0);
-
-    public bool TryRemove(T item) => _dictionary.TryRemove(item, out _);
-
-    public void Clear() => _dictionary.Clear();
 }

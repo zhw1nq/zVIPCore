@@ -21,6 +21,9 @@ public class SmokeManager
 
         Server.NextFrame(() =>
         {
+            if (!grenade.IsValid)
+                return;
+
             var player = grenade.Thrower.Value?.Controller.Value;
             if (player == null)
                 return;
@@ -63,11 +66,6 @@ public class SmokeManager
     public void SetPlayerSmokeColor(ulong steamId, string color)
     {
         _playerSmokeColors[steamId] = color;
-    }
-
-    public void RemovePlayerSmokeColor(ulong steamId)
-    {
-        _playerSmokeColors.TryRemove(steamId, out _);
     }
 
     public void ClearPlayerData(ulong steamId)

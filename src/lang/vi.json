@@ -15,7 +15,6 @@
     "zModelsCustom.web_login_success": "{green}Đăng nhập thành công qua web!",
     "zModelsCustom.web_login_time": " {gray}Thời gian: {yellow}{0}",
     "zModelsCustom.web_login_location": " {gray}Vị trí: {yellow}{0}, {1}",
-    "zModelsCustom.web_login_domain": " {gray}Tên miền: {yellow}{0}",
     "zModelsCustom.website_message": "{green}Truy cập website: {yellow}{0}",
     "zModelsCustom.cooldown_remaining": "{darkred}Vui lòng đợi {yellow}{0}{darkred} giây trước khi reload.",
     "zModelsCustom.kick_reason_spam": "Spam lệnh",
@@ -23,5 +22,6 @@
     "zModelsCustom.sound_enabled": "{green}Âm thanh vũ khí custom {yellow}đã bật{green}.",
     "zModelsCustom.sound_disabled": "{yellow}Âm thanh vũ khí custom {red}đã tắt{yellow}.",
     "zModelsCustom.web_smoke_applied": "{green}Đã áp dụng màu smoke {yellow}{0}",
-    "zModelsCustom.web_smoke_removed": "{green}Đã xóa màu smoke tùy chỉnh."
+    "zModelsCustom.web_smoke_removed": "{green}Đã xóa màu smoke tùy chỉnh.",
+    "zModelsCustom.web_reload_success": "{green}Đã tải lại cấu hình thành công."
 }

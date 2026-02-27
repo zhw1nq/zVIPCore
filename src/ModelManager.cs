@@ -23,15 +23,18 @@ public class ModelManager
     {
         if (!IsValidPlayer(player)) return;
 
-        var pawn = player.PlayerPawn.Value!;
+        var pawn = player.PlayerPawn.Value;
+        if (pawn == null) return;
         RemoveGloves(pawn);
 
         Server.NextFrame(() =>
         {
             if (!IsValidPlayer(player)) return;
+            var currentPawn = player.PlayerPawn.Value;
+            if (currentPawn == null) return;
 
-            pawn.SetModel(model.Model);
-            pawn.Render = model.DisableLeg ? LegDisabledColor : DefaultColor;
+            currentPawn.SetModel(model.Model);
+            currentPawn.Render = model.DisableLeg ? LegDisabledColor : DefaultColor;
         });
     }
 
@@ -40,14 +43,14 @@ public class ModelManager
         if (!IsValidPlayer(player)) return;
         if (!DefaultModels.TryGetValue(player.Team, out var defaultModel)) return;
 
-        var pawn = player.PlayerPawn.Value!;
-
         Server.NextFrame(() =>
         {
             if (!IsValidPlayer(player)) return;
+            var currentPawn = player.PlayerPawn.Value;
+            if (currentPawn == null) return;
 
-            pawn.SetModel(defaultModel);
-            pawn.Render = DefaultColor;
+            currentPawn.SetModel(defaultModel);
+            currentPawn.Render = DefaultColor;
         });
     }
 
@@ -72,7 +75,7 @@ public class ModelManager
         var angles = new QAngle(0, pawn.EyeAngles.Y + 180, 0);
 
         entity.Spawnflags = 256u;
-        entity.Collision.SolidType = SolidType_t.SOLID_VPHYSICS;
+        entity.Collision.SolidType = SolidType_t.SOLID_NONE;
         entity.Teleport(origin, angles, pawn.AbsVelocity);
         entity.DispatchSpawn();
 
@@ -100,8 +103,8 @@ public class ModelManager
         }
 
         const float totalTime = 5.0f;
-        const float interval = 0.04f;
-        const float rotationSpeed = 9.0f;
+        const float interval = 0.1f;
+        const float rotationSpeed = 22.5f;
 
         var currentRotation = entity.AbsRotation!;
         entity.Teleport(null, new QAngle(currentRotation.X, currentRotation.Y + rotationSpeed, currentRotation.Z), null);
@@ -161,7 +164,7 @@ public class ModelManager
         var steamId = player!.SteamID;
         var team = player.Team;
 
-        _ = LoadAndApplyModelAsync(player, steamId, team);
+        _ = zModelsCustom.SafeAsync(() => LoadAndApplyModelAsync(player, steamId, team));
 
         return HookResult.Continue;
     }
@@ -192,7 +195,7 @@ public class ModelManager
 
         if (!IsModelSlotValid(model, player.Team))
         {
-            _ = HandleInvalidSlot(player, steamId, team, model.Slot);
+            _ = zModelsCustom.SafeAsync(() => HandleInvalidSlot(player, steamId, team, model.Slot));
             return;
         }
 
