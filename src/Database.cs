@@ -483,7 +483,7 @@ public class Database : IDisposable
 
     #region Sound Settings
 
-    public async Task<bool?> GetPlayerSoundEnabledAsync(ulong steamId)
+    public async Task<bool> GetPlayerSoundEnabledAsync(ulong steamId)
     {
         if (_soundEnabledCache.TryGetValue(steamId, out var cached))
             return cached;
@@ -499,10 +499,13 @@ public class Database : IDisposable
         if (result != null && result != DBNull.Value)
         {
             var enabled = Convert.ToBoolean(result);
-            _soundEnabledCache.TryAdd(steamId, enabled);
+            _soundEnabledCache[steamId] = enabled;
             return enabled;
         }
-        return null;
+
+        // No row = sound enabled (default)
+        _soundEnabledCache[steamId] = true;
+        return true;
     }
 
     public async Task SavePlayerSoundEnabledAsync(ulong steamId, bool enabled)
@@ -512,16 +515,25 @@ public class Database : IDisposable
         await using var conn = new MySqlConnection(_connectionString);
         await conn.OpenAsync();
 
-        await using var cmd = new MySqlCommand(@"
-            INSERT INTO zSoundSettings (steamid, enabled) VALUES (@steamid, @enabled)
-            ON DUPLICATE KEY UPDATE enabled = @enabled", conn);
-        cmd.Parameters.AddWithValue("@steamid", steamId);
-        cmd.Parameters.AddWithValue("@enabled", enabled ? 1 : 0);
-
-        await cmd.ExecuteNonQueryAsync();
+        if (enabled)
+        {
+            // Sound enabled = default state, remove the row to save space
+            await using var delCmd = new MySqlCommand(
+                "DELETE FROM zSoundSettings WHERE steamid = @steamid", conn);
+            delCmd.Parameters.AddWithValue("@steamid", steamId);
+            await delCmd.ExecuteNonQueryAsync();
+        }
+        else
+        {
+            // Sound disabled = store in DB
+            await using var cmd = new MySqlCommand(@"
+                INSERT INTO zSoundSettings (steamid, enabled) VALUES (@steamid, @enabled)
+                ON DUPLICATE KEY UPDATE enabled = @enabled", conn);
+            cmd.Parameters.AddWithValue("@steamid", steamId);
+            cmd.Parameters.AddWithValue("@enabled", 0);
+            await cmd.ExecuteNonQueryAsync();
+        }
     }
-
-    private async Task PreloadPlayerSoundEnabledAsync(ulong steamId) => await GetPlayerSoundEnabledAsync(steamId);
 
     #endregion
 
@@ -555,13 +567,13 @@ public class Database : IDisposable
     {
         // Don't create row here - row is only created when saving data
         // This prevents empty rows for players who never save any skin
+        // Note: Sound settings not preloaded - defaults to enabled, only loaded on demand
         await Task.WhenAll(
             PreloadPlayerModelsAsync(steamId),
             PreloadPlayerWeaponsAsync(steamId),
             PreloadPlayerSmokeColorAsync(steamId),
             PreloadPlayerTrailAsync(steamId),
-            PreloadPlayerTracerAsync(steamId),
-            PreloadPlayerSoundEnabledAsync(steamId)
+            PreloadPlayerTracerAsync(steamId)
         );
     }
 

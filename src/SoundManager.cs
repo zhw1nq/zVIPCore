@@ -253,12 +253,20 @@ public class SoundManager
         // Get the weapon type from WeaponManager
         var weaponType = WeaponManager.GetDesignerName(weapon);
 
-        // Try to find custom weapon sound from player's equipped weapon
-        var modelData = zModelsCustom.WeaponManager.GetEquippedWeaponModel(player.SteamID, weaponType);
+        // First, try to get the model tracked on the weapon entity itself (for dropped weapons)
+        WeaponModelData? modelData = null;
+        var trackedModelId = zModelsCustom.WeaponManager.GetWeaponTrackedModelId(weapon);
+        if (!string.IsNullOrEmpty(trackedModelId))
+        {
+            modelData = GetModelDataByUniqueId(trackedModelId);
+        }
+
+        // Fallback: try to find custom weapon sound from player's equipped weapon
+        modelData ??= zModelsCustom.WeaponManager.GetEquippedWeaponModel(player.SteamID, weaponType);
 
         if (modelData != null && !string.IsNullOrWhiteSpace(modelData.SoundEvent))
         {
-            // Player has a custom weapon equipped with sound override
+            // Weapon has a custom sound override
             customEvent = @event != null
                 ? WeaponSoundUtils.ResolveTargetEvent(@event, weapon, modelData.SoundEvent, modelData.SoundEventUnsilenced)
                 : WeaponSoundUtils.ResolveTargetEvent(weapon, modelData.SoundEvent, modelData.SoundEventUnsilenced);
@@ -289,6 +297,15 @@ public class SoundManager
         }
 
         return !string.IsNullOrWhiteSpace(customEvent) || !string.IsNullOrWhiteSpace(officialEvent);
+    }
+
+    /// <summary>
+    /// Resolves a WeaponModelData from a uniqueId by searching the WeaponModelsConfig.
+    /// </summary>
+    private static WeaponModelData? GetModelDataByUniqueId(string uniqueId)
+    {
+        var modelsConfig = WeaponModelsConfig.Load(zModelsCustom.Instance.ModuleDirectory);
+        return modelsConfig.FindModelByUniqueId(uniqueId);
     }
 
     public void TrackWeaponSubclass(CBasePlayerWeapon weapon, string subclass)
@@ -426,16 +443,7 @@ public class SoundManager
             return;
 
         var enabled = await zModelsCustom.Database.GetPlayerSoundEnabledAsync(steamId);
-        if (enabled.HasValue)
-        {
-            Server.NextFrame(() => SetCustomSoundEnabledFromSteamId(steamId, enabled.Value));
-            return;
-        }
-
-        // Save default if not found
-        var soundConfig = zModelsCustom.Config.SoundConfig;
-        var defaultEnabled = soundConfig?.CustomSoundDefaultEnabled ?? true;
-        await zModelsCustom.Database.SavePlayerSoundEnabledAsync(steamId, defaultEnabled);
+        Server.NextFrame(() => SetCustomSoundEnabledFromSteamId(steamId, enabled));
     }
 
     private Task SaveCustomSoundSettingAsync(ulong steamId, bool enabled)

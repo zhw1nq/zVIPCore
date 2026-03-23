@@ -9,6 +9,7 @@ public class WeaponManager
     private WeaponModelsConfig _modelsConfig = new();
     private readonly ConcurrentDictionary<ulong, ConcurrentDictionary<string, string>> _playerWeapons = new();
     private static readonly ConcurrentDictionary<nint, string> OldSubclassByHandle = new();
+    private static readonly ConcurrentDictionary<nint, string> WeaponModelIdByHandle = new();
 
     public WeaponManager()
     {
@@ -56,6 +57,10 @@ public class WeaponManager
             if (player == null || !player.IsValid || player.IsBot)
                 return;
 
+            // If weapon already has a tracked model (e.g. dropped weapon), re-apply it
+            if (TryReapplyWeaponTrackedModel(weapon))
+                return;
+
             ApplyPlayerWeaponSubclass(player, weapon);
         });
     }
@@ -68,6 +73,10 @@ public class WeaponManager
 
         CBasePlayerWeapon? activeWeapon = player.PlayerPawn.Value?.WeaponServices?.ActiveWeapon.Value;
         if (activeWeapon?.IsValid != true)
+            return HookResult.Continue;
+
+        // If weapon already has a tracked model (e.g. picked up from another player), re-apply it
+        if (TryReapplyWeaponTrackedModel(activeWeapon))
             return HookResult.Continue;
 
         ApplyPlayerWeaponSubclass(player, activeWeapon);
@@ -91,6 +100,7 @@ public class WeaponManager
                 if (!string.IsNullOrEmpty(subclass) && weaponDesignerName.Equals(modelData.WeaponType, StringComparison.Ordinal))
                 {
                     SetSubclass(weapon, weaponDesignerName, subclass, modelData.Name);
+                    WeaponModelIdByHandle[weapon.Handle] = modelId;
                 }
             }
         }
@@ -132,6 +142,7 @@ public class WeaponManager
             if (player.IsValid && weapon?.IsValid == true)
             {
                 SetSubclass(weapon, weaponName, subclass, modelData.Name);
+                WeaponModelIdByHandle[weapon.Handle] = modelId;
             }
         });
     }
@@ -225,6 +236,45 @@ public class WeaponManager
     public static void ClearSubclassCache()
     {
         OldSubclassByHandle.Clear();
+        WeaponModelIdByHandle.Clear();
+    }
+
+    /// <summary>
+    /// Gets the tracked modelId for a weapon entity, if any.
+    /// Used by SoundManager to resolve sounds from the weapon itself rather than the current holder.
+    /// </summary>
+    public string? GetWeaponTrackedModelId(CBasePlayerWeapon weapon)
+    {
+        if (weapon == null || !weapon.IsValid)
+            return null;
+        return WeaponModelIdByHandle.TryGetValue(weapon.Handle, out var modelId) ? modelId : null;
+    }
+
+    /// <summary>
+    /// Re-applies the tracked model on a weapon that already has one (e.g. dropped/picked up weapon).
+    /// Returns true if a tracked model was found and re-applied.
+    /// </summary>
+    private bool TryReapplyWeaponTrackedModel(CBasePlayerWeapon weapon)
+    {
+        if (!WeaponModelIdByHandle.TryGetValue(weapon.Handle, out var trackedModelId))
+            return false;
+
+        var modelData = _modelsConfig.FindModelByUniqueId(trackedModelId);
+        if (modelData == null)
+        {
+            WeaponModelIdByHandle.TryRemove(weapon.Handle, out _);
+            return false;
+        }
+
+        var subclass = modelData.GetSubclassName();
+        var weaponDesignerName = GetDesignerName(weapon);
+        if (!string.IsNullOrEmpty(subclass) && weaponDesignerName.Equals(modelData.WeaponType, StringComparison.Ordinal))
+        {
+            SetSubclass(weapon, weaponDesignerName, subclass, modelData.Name);
+            return true;
+        }
+
+        return false;
     }
 
     private static CCSPlayerController? FindPlayerFromWeapon(CBasePlayerWeapon weapon)

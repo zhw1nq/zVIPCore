@@ -23,6 +23,7 @@ public class zModelsCustom : BasePlugin
     public static SmokeManager SmokeManager { get; private set; } = null!;
     public static EffectsManager EffectsManager { get; private set; } = null!;
     public static SoundManager SoundManager { get; private set; } = null!;
+    public static ParticleManager ParticleManager { get; private set; } = null!;
 
     private readonly ConcurrentDictionary<ulong, ReloadInfo> _reloadTracking = new();
 
@@ -55,6 +56,9 @@ public class zModelsCustom : BasePlugin
         // Initialize SoundManager
         SoundManager = new SoundManager();
 
+        // Initialize ParticleManager
+        ParticleManager = new ParticleManager();
+
         // Player model events
         RegisterEventHandler<EventPlayerSpawn>(ModelManager.OnPlayerSpawn);
         RegisterEventHandler<EventPlayerSpawn>(SoundManager.OnPlayerSpawn, HookMode.Post);
@@ -80,6 +84,9 @@ public class zModelsCustom : BasePlugin
         HookUserMessage(452, SoundManager.OnWeaponFireUserMessage, HookMode.Pre);
 
         RegisterCommands();
+
+        // Kill particle effect
+        RegisterEventHandler<EventPlayerDeath>(ParticleManager.OnPlayerDeath);
 
         // Load configs and register map start for precaching
         var initialWeaponModels = WeaponModelsConfig.Load(ModuleDirectory);
@@ -130,7 +137,10 @@ public class zModelsCustom : BasePlugin
         }
 
         // Sound toggle command
-        AddCommand("css_zsound", "Toggle custom weapon sounds", SoundManager.OnToggleCustomSound);
+        AddCommand("css_zrestrict", "Toggle custom weapon sounds", SoundManager.OnToggleCustomSound);
+
+        // Kill particle effect command
+        AddCommand("css_testpart", "Toggle kill particle effect", ParticleManager.OnToggleTestPart);
     }
 
     [RequiresPermissions("@css/root")]
@@ -1000,6 +1010,7 @@ public class zModelsCustom : BasePlugin
         EffectsManager.ClearPlayerData(steamId);
         EffectsManager.ClearPlayerSlot(player.Slot);
         _reloadTracking.TryRemove(steamId, out _);
+        ParticleManager.ClearPlayerData(steamId);
 
         return HookResult.Continue;
     }

@@ -23,5 +23,7 @@
   "zModelsCustom.sound_disabled": "{yellow}Custom weapon sounds {red}disabled{yellow}.",
   "zModelsCustom.web_smoke_applied": "{green}Applied smoke color {yellow}{0}",
   "zModelsCustom.web_smoke_removed": "{green}Removed custom smoke color.",
-  "zModelsCustom.web_reload_success": "{green}Configuration reloaded successfully."
+  "zModelsCustom.web_reload_success": "{green}Configuration reloaded successfully.",
+  "zModelsCustom.testpart_enabled": "{green}Kill particle effect {yellow}enabled{green}.",
+  "zModelsCustom.testpart_disabled": "{yellow}Kill particle effect {red}disabled{yellow}."
 }

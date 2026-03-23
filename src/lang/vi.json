@@ -23,5 +23,7 @@
     "zModelsCustom.sound_disabled": "{yellow}Âm thanh vũ khí custom {red}đã tắt{yellow}.",
     "zModelsCustom.web_smoke_applied": "{green}Đã áp dụng màu smoke {yellow}{0}",
     "zModelsCustom.web_smoke_removed": "{green}Đã xóa màu smoke tùy chỉnh.",
-    "zModelsCustom.web_reload_success": "{green}Đã tải lại cấu hình thành công."
+    "zModelsCustom.web_reload_success": "{green}Đã tải lại cấu hình thành công.",
+    "zModelsCustom.testpart_enabled": "{green}Hiệu ứng kill particle {yellow}đã bật{green}.",
+    "zModelsCustom.testpart_disabled": "{yellow}Hiệu ứng kill particle {red}đã tắt{yellow}."
 }

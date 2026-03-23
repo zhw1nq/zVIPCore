@@ -6,6 +6,8 @@
 | --------------------------- | ------------------------- |
 | `!svip` `!vip` `!md` `!mds` | Mở website models         |
 | `!reloadmodels` `!rlmodels` | Reload config (@css/root) |
+| `!zrestrict`                | Toggle custom weapon sounds |
+| `!testpart`                 | Toggle kill particle effect |
 
 ---
 
