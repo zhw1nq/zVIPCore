@@ -1,5 +1,5 @@
 {
-  "zModelsCustom.prefix": " {darkred}[ {green}zModels {darkred}] {default}",
+  "zModelsCustom.prefix": " {gold}zSystems {silver}» ",
   "zModelsCustom.console_only": "Lệnh này chỉ có thể sử dụng từ console.",
   "zModelsCustom.reload_success": "Đã tải lại: {0} categories ({1} models), {2} loại vũ khí ({3} skins)",
   "zModelsCustom.reload_error": "{darkred}Lỗi tải lại: {default}{0}",

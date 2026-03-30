@@ -1,8 +1,8 @@
 {
-  "zModelsCustom.prefix": " {darkred}[ {green}zModels {darkred}] {default}",
+  "zModelsCustom.prefix": " {gold}zSystems {silver}» ",
   "zModelsCustom.console_only": "This command can only be used from console.",
   "zModelsCustom.reload_success": "Reloaded: {0} player categories ({1} models), {2} weapon types ({3} skins)",
-  "zModelsCustom.reload_error": "{darkred}Error reloading: {default}{0}",
+  "zModelsCustom.reload_error": "{darkred}Error reloading: {silver}{0}",
   "zModelsCustom.website_message": "{green}Visit our website: {yellow}{0}",
   "zModelsCustom.cooldown_remaining": "{darkred}Please wait {yellow}{0}{darkred} seconds before reloading again.",
   "zModelsCustom.kick_reason_spam": "Command spam detected",
