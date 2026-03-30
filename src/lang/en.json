@@ -1,8 +1,8 @@
 {
-  "zModelsCustom.prefix": " {darkred}[ {green}zModels {darkred}] {default}",
+  "zModelsCustom.prefix": " {gold}zSystems {silver}» ",
   "zModelsCustom.console_only": "This command can only be used from console.",
   "zModelsCustom.reload_success": "Reloaded: {0} player categories ({1} models), {2} weapon types ({3} skins)",
-  "zModelsCustom.reload_error": "{darkred}Error reloading: {default}{0}",
+  "zModelsCustom.reload_error": "{darkred}Error reloading: {silver}{0}",
   "zModelsCustom.web_model_applied_site": "{green}Applied model {yellow}{0}{green} for {yellow}{1}",
   "zModelsCustom.web_model_removed_all": "{green}Removed all custom models.",
   "zModelsCustom.web_weapon_applied": "{green}Applied weapon skin {yellow}{0}{green} for {yellow}{1}",

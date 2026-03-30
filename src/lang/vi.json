@@ -1,8 +1,8 @@
 {
-  "zModelsCustom.prefix": " {darkred}[ {green}zModels {darkred}] {default}",
+  "zModelsCustom.prefix": " {gold}zSystems {silver}» ",
   "zModelsCustom.console_only": "Lệnh này chỉ có thể sử dụng từ console.",
   "zModelsCustom.reload_success": "Đã tải lại: {0} categories ({1} models), {2} loại vũ khí ({3} skins)",
-  "zModelsCustom.reload_error": "{darkred}Lỗi tải lại: {default}{0}",
+  "zModelsCustom.reload_error": "{darkred}Lỗi tải lại: {silver}{0}",
   "zModelsCustom.web_model_applied_site": "{green}Đã áp dụng model {yellow}{0}{green} cho {yellow}{1}",
   "zModelsCustom.web_model_removed_all": "{green}Đã xóa tất cả model tùy chỉnh.",
   "zModelsCustom.web_weapon_applied": "{green}Đã áp dụng skin vũ khí {yellow}{0}{green} cho {yellow}{1}",
