@@ -11,15 +11,9 @@ public class WeaponManager
     private static readonly ConcurrentDictionary<nint, string> OldSubclassByHandle = new();
     private static readonly ConcurrentDictionary<nint, string> WeaponModelIdByHandle = new();
 
-    public WeaponManager()
-    {
-        _modelsConfig = WeaponModelsConfig.Load(zModelsCustom.Instance.ModuleDirectory);
-    }
+    public void UpdateModelsConfig(WeaponModelsConfig config) => _modelsConfig = config;
 
-    public void UpdateModelsConfig(WeaponModelsConfig config)
-    {
-        _modelsConfig = config;
-    }
+    public WeaponModelsConfig GetModelsConfig() => _modelsConfig;
 
     public void PrecacheModels()
     {
@@ -31,11 +25,8 @@ public class WeaponManager
                 {
                     if (!string.IsNullOrEmpty(weapon.Model))
                     {
-                        try
-                        {
-                            Server.PrecacheModel(weapon.Model);
-                        }
-                        catch { /* Model may already be precached by addon */ }
+                        try { Server.PrecacheModel(weapon.Model); }
+                        catch { /* Already precached by addon */ }
                     }
                 }
             }
@@ -49,15 +40,14 @@ public class WeaponManager
 
         Server.NextWorldUpdate(() =>
         {
-            CBasePlayerWeapon? weapon = entity.As<CBasePlayerWeapon>();
+            var weapon = entity.As<CBasePlayerWeapon>();
             if (weapon?.IsValid != true || weapon.OriginalOwnerXuidLow <= 0)
                 return;
 
-            CCSPlayerController? player = FindPlayerFromWeapon(weapon);
+            var player = FindPlayerFromWeapon(weapon);
             if (player == null || !player.IsValid || player.IsBot)
                 return;
 
-            // If weapon already has a tracked model (e.g. dropped weapon), re-apply it
             if (TryReapplyWeaponTrackedModel(weapon))
                 return;
 
@@ -67,20 +57,18 @@ public class WeaponManager
 
     public HookResult OnItemEquip(EventItemEquip @event, GameEventInfo info)
     {
-        CCSPlayerController? player = @event.Userid;
+        var player = @event.Userid;
         if (player == null || !player.IsValid || player.IsBot)
             return HookResult.Continue;
 
-        CBasePlayerWeapon? activeWeapon = player.PlayerPawn.Value?.WeaponServices?.ActiveWeapon.Value;
+        var activeWeapon = player.PlayerPawn.Value?.WeaponServices?.ActiveWeapon.Value;
         if (activeWeapon?.IsValid != true)
             return HookResult.Continue;
 
-        // If weapon already has a tracked model (e.g. picked up from another player), re-apply it
         if (TryReapplyWeaponTrackedModel(activeWeapon))
             return HookResult.Continue;
 
         ApplyPlayerWeaponSubclass(player, activeWeapon);
-
         return HookResult.Continue;
     }
 
@@ -89,7 +77,6 @@ public class WeaponManager
         var steamId = player.SteamID;
         var weaponDesignerName = GetDesignerName(weapon);
 
-        // Check cache first
         if (_playerWeapons.TryGetValue(steamId, out var weapons) &&
             weapons.TryGetValue(weaponDesignerName, out var modelId))
         {
@@ -106,7 +93,6 @@ public class WeaponManager
         }
         else
         {
-            // Load from database async
             _ = zModelsCustom.SafeAsync(() => LoadAndApplyWeaponSubclassAsync(steamId, player, weapon, weaponDesignerName));
         }
     }
@@ -114,28 +100,21 @@ public class WeaponManager
     private async Task LoadAndApplyWeaponSubclassAsync(ulong steamId, CCSPlayerController player, CBasePlayerWeapon weapon, string weaponName)
     {
         var modelId = await zModelsCustom.Database.GetPlayerWeaponAsync(steamId, weaponName);
+        if (modelId == null) return;
 
-        if (modelId == null)
-            return;
-
-        // Cache the result
         var weapons = _playerWeapons.GetOrAdd(steamId, _ => new ConcurrentDictionary<string, string>());
         weapons[weaponName] = modelId;
 
         var modelData = _modelsConfig.FindModelByUniqueId(modelId);
         if (modelData == null)
         {
-            // Model no longer exists in config, remove from database
             await zModelsCustom.Database.RemovePlayerWeaponAsync(steamId, weaponName);
             return;
         }
 
         var subclass = modelData.GetSubclassName();
-        if (string.IsNullOrEmpty(subclass))
-            return;
-
-        if (!weaponName.Equals(modelData.WeaponType, StringComparison.Ordinal))
-            return;
+        if (string.IsNullOrEmpty(subclass)) return;
+        if (!weaponName.Equals(modelData.WeaponType, StringComparison.Ordinal)) return;
 
         Server.NextFrame(() =>
         {
@@ -154,37 +133,25 @@ public class WeaponManager
 
         var activeWeapon = player.PlayerPawn.Value.WeaponServices.ActiveWeapon.Value;
         if (activeWeapon?.IsValid == true)
-        {
             ApplyPlayerWeaponSubclass(player, activeWeapon);
-        }
     }
 
-    public void ClearPlayerData(ulong steamId)
-    {
-        _playerWeapons.TryRemove(steamId, out _);
-    }
+    public void ClearPlayerData(ulong steamId) => _playerWeapons.TryRemove(steamId, out _);
 
     public WeaponModelData? GetEquippedWeaponModel(ulong steamId, string weaponType)
     {
-        if (!_playerWeapons.TryGetValue(steamId, out var weapons))
-            return null;
-        if (!weapons.TryGetValue(weaponType, out var modelId))
-            return null;
+        if (!_playerWeapons.TryGetValue(steamId, out var weapons)) return null;
+        if (!weapons.TryGetValue(weaponType, out var modelId)) return null;
         return _modelsConfig.FindModelByUniqueId(modelId);
     }
 
     public void UpdatePlayerWeaponCache(ulong steamId, string weaponName, string? modelId)
     {
         var weapons = _playerWeapons.GetOrAdd(steamId, _ => new ConcurrentDictionary<string, string>());
-
         if (modelId == null)
-        {
             weapons.TryRemove(weaponName, out _);
-        }
         else
-        {
             weapons[weaponName] = modelId;
-        }
     }
 
     #region Weapon Helpers
@@ -207,29 +174,23 @@ public class WeaponManager
 
     public static void SetSubclass(CBasePlayerWeapon weapon, string oldSubclass, string newSubclass, string? customName = null)
     {
-        if (string.IsNullOrEmpty(newSubclass))
-            return;
+        if (string.IsNullOrEmpty(newSubclass)) return;
 
-        var handle = weapon.Handle;
-        OldSubclassByHandle[handle] = oldSubclass;
+        OldSubclassByHandle[weapon.Handle] = oldSubclass;
         zModelsCustom.SoundManager?.TrackWeaponSubclass(weapon, newSubclass);
         weapon.AcceptInput("ChangeSubclass", weapon, weapon, newSubclass);
 
-        // Set custom name (nametag) if provided
         if (!string.IsNullOrEmpty(customName))
-        {
             weapon.AttributeManager.Item.CustomName = customName;
-        }
     }
 
     public static void ResetSubclass(CBasePlayerWeapon weapon)
     {
-        var handle = weapon.Handle;
-        if (!OldSubclassByHandle.TryGetValue(handle, out string? oldSubclass) || string.IsNullOrEmpty(oldSubclass))
+        if (!OldSubclassByHandle.TryGetValue(weapon.Handle, out var oldSubclass) || string.IsNullOrEmpty(oldSubclass))
             return;
 
         weapon.AcceptInput("ChangeSubclass", weapon, weapon, oldSubclass);
-        OldSubclassByHandle.TryRemove(handle, out _);
+        OldSubclassByHandle.TryRemove(weapon.Handle, out _);
         zModelsCustom.SoundManager?.UntrackWeaponSubclass(weapon);
     }
 
@@ -239,21 +200,12 @@ public class WeaponManager
         WeaponModelIdByHandle.Clear();
     }
 
-    /// <summary>
-    /// Gets the tracked modelId for a weapon entity, if any.
-    /// Used by SoundManager to resolve sounds from the weapon itself rather than the current holder.
-    /// </summary>
     public string? GetWeaponTrackedModelId(CBasePlayerWeapon weapon)
     {
-        if (weapon == null || !weapon.IsValid)
-            return null;
+        if (weapon == null || !weapon.IsValid) return null;
         return WeaponModelIdByHandle.TryGetValue(weapon.Handle, out var modelId) ? modelId : null;
     }
 
-    /// <summary>
-    /// Re-applies the tracked model on a weapon that already has one (e.g. dropped/picked up weapon).
-    /// Returns true if a tracked model was found and re-applied.
-    /// </summary>
     private bool TryReapplyWeaponTrackedModel(CBasePlayerWeapon weapon)
     {
         if (!WeaponModelIdByHandle.TryGetValue(weapon.Handle, out var trackedModelId))
@@ -279,11 +231,8 @@ public class WeaponManager
 
     private static CCSPlayerController? FindPlayerFromWeapon(CBasePlayerWeapon weapon)
     {
-        if (weapon.OwnerEntity.Value == null)
-            return null;
-
-        CCSPlayerPawn? pawn = weapon.OwnerEntity.Value.As<CCSPlayerPawn>();
-        return pawn?.OriginalController.Value;
+        if (weapon.OwnerEntity.Value == null) return null;
+        return weapon.OwnerEntity.Value.As<CCSPlayerPawn>()?.OriginalController.Value;
     }
 
     #endregion

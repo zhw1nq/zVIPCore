@@ -10,11 +10,29 @@ public partial class Config
     [JsonPropertyName("database")]
     public DatabaseConfig DatabaseConfig { get; set; } = new();
 
-    [JsonPropertyName("reload_commands")]
-    public List<string> ReloadCommands { get; set; } = new() { "reloadmodels", "rlmodels" };
-
     [JsonPropertyName("website_url")]
     public string WebsiteUrl { get; set; } = "https://example.com/models";
+
+    [JsonPropertyName("cdn_base_url")]
+    public string CdnBaseUrl { get; set; } = "https://cdn.lunie.dev/zSystems_v2/json/fetch/";
+
+    [JsonPropertyName("models_json_filename")]
+    public string ModelsJsonFilename { get; set; } = "zModels.json";
+
+    [JsonPropertyName("weapons_json_filename")]
+    public string WeaponsJsonFilename { get; set; } = "zWeapons.json";
+
+    [JsonPropertyName("restrict_permission")]
+    public string RestrictPermission { get; set; } = "";
+
+    [JsonPropertyName("reload_cooldown_seconds")]
+    public float ReloadCooldownSeconds { get; set; } = 120.0f;
+
+    [JsonPropertyName("anti_spam_threshold")]
+    public int AntiSpamThreshold { get; set; } = 3;
+
+    [JsonPropertyName("anti_spam_window_seconds")]
+    public float AntiSpamWindowSeconds { get; set; } = 15.0f;
 
     [JsonPropertyName("sound")]
     public SoundConfig SoundConfig { get; set; } = new();
@@ -23,41 +41,20 @@ public partial class Config
     {
         var path = GetConfigPath(moduleDirectory);
         var configDir = Path.GetDirectoryName(path)!;
-
-        // Ensure directory exists
         Directory.CreateDirectory(configDir);
 
         var config = File.Exists(path)
             ? LoadExistingConfig(path)
             : CreateDefaultConfig(path);
 
-        // Ensure player models config exists
-        var modelsPath = Path.Combine(configDir, "zModels.json");
+        // Ensure model/weapon configs exist
+        var modelsPath = Path.Combine(configDir, config.ModelsJsonFilename);
         if (!File.Exists(modelsPath))
-        {
             PlayerModelsConfig.CreateDefault(modelsPath);
-        }
 
-        // Ensure weapon models config exists
-        var weaponsPath = Path.Combine(configDir, "zWeapons.json");
+        var weaponsPath = Path.Combine(configDir, config.WeaponsJsonFilename);
         if (!File.Exists(weaponsPath))
-        {
             WeaponModelsConfig.CreateDefault(weaponsPath);
-        }
-
-        // Ensure trails config exists
-        var trailsPath = Path.Combine(configDir, "zTrails.json");
-        if (!File.Exists(trailsPath))
-        {
-            TrailsConfig.CreateDefault(trailsPath);
-        }
-
-        // Ensure tracers config exists  
-        var tracersPath = Path.Combine(configDir, "zTracers.json");
-        if (!File.Exists(tracersPath))
-        {
-            TracersConfig.CreateDefault(tracersPath);
-        }
 
         return config;
     }
@@ -78,6 +75,9 @@ public partial class Config
 
     private static string GetConfigPath(string moduleDirectory) =>
         Path.Combine(moduleDirectory, "../../configs/plugins/zModelsCustom/zConfig.json");
+
+    public static string GetConfigDirectory(string moduleDirectory) =>
+        Path.GetDirectoryName(GetConfigPath(moduleDirectory))!;
 
     private static Config CreateDefaultConfig(string path)
     {
@@ -114,6 +114,18 @@ public class DatabaseConfig
 
     [JsonPropertyName("password")]
     public string Password { get; set; } = "";
+
+    [JsonPropertyName("min_pool_size")]
+    public int MinPoolSize { get; set; } = 2;
+
+    [JsonPropertyName("max_pool_size")]
+    public int MaxPoolSize { get; set; } = 20;
+
+    [JsonPropertyName("connection_timeout")]
+    public int ConnectionTimeout { get; set; } = 30;
+
+    [JsonPropertyName("command_timeout")]
+    public int CommandTimeout { get; set; } = 30;
 }
 
 // Player Models Config (zModels.json)
@@ -128,25 +140,27 @@ public partial class PlayerModelsConfig
     [GeneratedRegex(@"(?<=^|\s)//.*|/\*[\s\S]*?\*/", RegexOptions.Compiled | RegexOptions.Multiline)]
     private static partial Regex CommentPattern();
 
+    [JsonPropertyName("version")]
+    public string Version { get; set; } = "0.0.1";
+
     [JsonPropertyName("Categories")]
     public Dictionary<string, Dictionary<string, PlayerModelData>> Categories { get; set; } = new();
 
     public static PlayerModelsConfig Load(string moduleDirectory)
     {
-        var path = GetModelsPath(moduleDirectory);
+        var configDir = Config.GetConfigDirectory(moduleDirectory);
+        var config = zModelsCustom.Config;
+        var path = Path.Combine(configDir, config?.ModelsJsonFilename ?? "zModels.json");
 
         if (!File.Exists(path))
-        {
             return CreateDefaultModels(path);
-        }
 
         try
         {
             var json = File.ReadAllText(path);
             json = CommentPattern().Replace(json, "");
-
-            var config = JsonSerializer.Deserialize<PlayerModelsConfig>(json, JsonOptions);
-            return config?.Categories?.Count > 0 ? config : new PlayerModelsConfig();
+            var result = JsonSerializer.Deserialize<PlayerModelsConfig>(json, JsonOptions);
+            return result?.Categories?.Count > 0 ? result : new PlayerModelsConfig();
         }
         catch (Exception ex)
         {
@@ -155,13 +169,11 @@ public partial class PlayerModelsConfig
         }
     }
 
-    private static string GetModelsPath(string moduleDirectory) =>
-        Path.Combine(moduleDirectory, "../../configs/plugins/zModelsCustom/zModels.json");
-
     private static PlayerModelsConfig CreateDefaultModels(string path)
     {
         var defaultModels = new PlayerModelsConfig
         {
+            Version = "0.0.1",
             Categories = new()
             {
                 ["Example Category"] = new()
@@ -191,10 +203,7 @@ public partial class PlayerModelsConfig
         return defaultModels;
     }
 
-    public static void CreateDefault(string path)
-    {
-        CreateDefaultModels(path);
-    }
+    public static void CreateDefault(string path) => CreateDefaultModels(path);
 
     public PlayerModelData? FindModelByUniqueId(string uniqueId)
     {
@@ -253,17 +262,20 @@ public partial class WeaponModelsConfig
     [GeneratedRegex(@"//.*|/\*[\s\S]*?\*/", RegexOptions.Compiled)]
     private static partial Regex CommentPattern();
 
+    [JsonPropertyName("version")]
+    public string Version { get; set; } = "0.0.1";
+
     [JsonPropertyName("Weapons")]
     public Dictionary<string, WeaponCollection> Weapons { get; set; } = new();
 
     public static WeaponModelsConfig Load(string moduleDirectory)
     {
-        var path = GetModelsPath(moduleDirectory);
+        var configDir = Config.GetConfigDirectory(moduleDirectory);
+        var config = zModelsCustom.Config;
+        var path = Path.Combine(configDir, config?.WeaponsJsonFilename ?? "zWeapons.json");
 
         if (!File.Exists(path))
-        {
             return CreateDefaultModels(path);
-        }
 
         try
         {
@@ -271,18 +283,22 @@ public partial class WeaponModelsConfig
             json = CommentPattern().Replace(json, "");
 
             using var doc = JsonDocument.Parse(json);
-            var config = new WeaponModelsConfig();
+            var result = new WeaponModelsConfig();
+
+            // Parse version
+            if (doc.RootElement.TryGetProperty("version", out var versionEl))
+                result.Version = versionEl.GetString() ?? "0.0.1";
 
             if (doc.RootElement.TryGetProperty("Weapons", out var weaponsElement))
             {
                 foreach (var collectionProp in weaponsElement.EnumerateObject())
                 {
                     var collection = ParseCollection(collectionProp.Value);
-                    config.Weapons[collectionProp.Name] = collection;
+                    result.Weapons[collectionProp.Name] = collection;
                 }
             }
 
-            return config.Weapons.Count > 0 ? config : new WeaponModelsConfig();
+            return result.Weapons.Count > 0 ? result : new WeaponModelsConfig();
         }
         catch (Exception ex)
         {
@@ -306,28 +322,23 @@ public partial class WeaponModelsConfig
                     collection.Name = prop.Value.GetString() ?? "";
                     break;
                 default:
-                    // weapon_xxx properties - contains dictionary of skins
                     if (prop.Name.StartsWith("weapon_"))
                     {
-                        var weaponType = prop.Name;
                         var skinsList = new List<WeaponModelData>();
 
-                        // Iterate through each skin in this weapon type
                         foreach (var skinProp in prop.Value.EnumerateObject())
                         {
                             var weaponData = JsonSerializer.Deserialize<WeaponModelData>(skinProp.Value.GetRawText(), JsonOptions);
                             if (weaponData != null)
                             {
-                                weaponData.WeaponType = weaponType;
-                                weaponData.SkinKey = skinProp.Name; // e.g., "AK-47 Zaomeng"
+                                weaponData.WeaponType = prop.Name;
+                                weaponData.SkinKey = skinProp.Name;
                                 skinsList.Add(weaponData);
                             }
                         }
 
                         if (skinsList.Count > 0)
-                        {
-                            collection.WeaponItems[weaponType] = skinsList;
-                        }
+                            collection.WeaponItems[prop.Name] = skinsList;
                     }
                     break;
             }
@@ -336,12 +347,10 @@ public partial class WeaponModelsConfig
         return collection;
     }
 
-    private static string GetModelsPath(string moduleDirectory) =>
-        Path.Combine(moduleDirectory, "../../configs/plugins/zModelsCustom/zWeapons.json");
-
     private static WeaponModelsConfig CreateDefaultModels(string path)
     {
         var defaultJson = @"{
+  ""version"": ""0.0.1"",
   ""Weapons"": {
     ""Example Collection"": {
       ""image"": ""example.png"",
@@ -372,10 +381,7 @@ public partial class WeaponModelsConfig
         return new WeaponModelsConfig();
     }
 
-    public static void CreateDefault(string path)
-    {
-        CreateDefaultModels(path);
-    }
+    public static void CreateDefault(string path) => CreateDefaultModels(path);
 
     public WeaponModelData? FindModelByUniqueId(string uniqueId)
     {
@@ -425,25 +431,6 @@ public partial class WeaponModelsConfig
         return null;
     }
 
-    public (string CollectionName, WeaponCollection Collection)? GetCollectionByUniqueId(string uniqueId)
-    {
-        foreach (var kvp in Weapons)
-        {
-            foreach (var skins in kvp.Value.WeaponItems.Values)
-            {
-                foreach (var weapon in skins)
-                {
-                    if (weapon.UniqueId == uniqueId)
-                        return (kvp.Key, kvp.Value);
-                }
-            }
-        }
-        return null;
-    }
-
-    /// <summary>
-    /// Get total count of all skins across all collections
-    /// </summary>
     public int GetTotalSkinsCount()
     {
         return Weapons.Values
@@ -460,15 +447,9 @@ public class WeaponCollection
     [JsonPropertyName("name")]
     public string Name { get; set; } = "";
 
-    // Weapons in this collection - each weapon type can have multiple skins
-    // Key: weapon_type (e.g., "weapon_ak47")
-    // Value: List of skins for that weapon type
     [JsonIgnore]
     public Dictionary<string, List<WeaponModelData>> WeaponItems { get; set; } = new();
 
-    /// <summary>
-    /// Get total count of skins in this collection
-    /// </summary>
     public int GetSkinsCount() => WeaponItems.Values.Sum(s => s.Count);
 }
 
@@ -484,36 +465,28 @@ public class WeaponModelData
     public string Model { get; set; } = "";
 
     [JsonPropertyName("subclass")]
-    public string Subclass { get; set; } = "";  // AG2 subclass name (e.g., "weapon_awp+1001")
+    public string Subclass { get; set; } = "";
 
     [JsonPropertyName("image_gun")]
     public string ImageGun { get; set; } = "";
 
     [JsonPropertyName("sound_event")]
-    public string SoundEvent { get; set; } = "";  // Custom fire sound event
+    public string SoundEvent { get; set; } = "";
 
     [JsonPropertyName("sound_event_unsilenced")]
-    public string SoundEventUnsilenced { get; set; } = "";  // Optional unsilenced variant (M4A1-S/USP-S)
+    public string SoundEventUnsilenced { get; set; } = "";
 
-    // Set programmatically based on the JSON property name (weapon_ak47, etc.)
     [JsonIgnore]
     public string WeaponType { get; set; } = "";
 
-    // The key name in JSON (e.g., "AK-47 Zaomeng")
     [JsonIgnore]
     public string SkinKey { get; set; } = "";
 
-    /// <summary>
-    /// Gets the subclass name for ChangeSubclass.
-    /// Returns explicit Subclass if set, otherwise falls back to model filename.
-    /// </summary>
     public string GetSubclassName()
     {
-        // Prefer explicit subclass if set
         if (!string.IsNullOrEmpty(Subclass))
             return Subclass;
 
-        // Fallback to model filename
         if (string.IsNullOrEmpty(Model))
             return "";
 
@@ -521,221 +494,7 @@ public class WeaponModelData
     }
 }
 
-// Trails Config (zTrails.json) - CS2-Store compatible
-public partial class TrailsConfig
-{
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        WriteIndented = true,
-        PropertyNameCaseInsensitive = true
-    };
-
-    [GeneratedRegex(@"//.*|/\*[\s\S]*?\*/", RegexOptions.Compiled)]
-    private static partial Regex CommentPattern();
-
-    [JsonPropertyName("Trail")]
-    public Dictionary<string, Dictionary<string, TrailData>> Categories { get; set; } = new();
-
-    public static TrailsConfig Load(string moduleDirectory)
-    {
-        var path = GetConfigPath(moduleDirectory);
-
-        if (!File.Exists(path))
-            return CreateDefault(path);
-
-        try
-        {
-            var json = File.ReadAllText(path);
-            json = CommentPattern().Replace(json, "");
-            var config = JsonSerializer.Deserialize<TrailsConfig>(json, JsonOptions);
-            return config ?? new TrailsConfig();
-        }
-        catch (Exception ex)
-        {
-            Server.PrintToConsole($"[zModelsCustom] Error loading trails config: {ex.Message}");
-            return new TrailsConfig();
-        }
-    }
-
-    private static string GetConfigPath(string moduleDirectory) =>
-        Path.Combine(moduleDirectory, "../../configs/plugins/zModelsCustom/zTrails.json");
-
-    public static TrailsConfig CreateDefault(string path)
-    {
-        var config = new TrailsConfig
-        {
-            Categories = new()
-            {
-                ["Player Trail"] = new()
-                {
-                    ["Energycirc Trail"] = new TrailData
-                    {
-                        UniqueId = "energycircltrail",
-                        Model = "particles/ui/status_levels/ui_status_level_8_energycirc.vpcf",
-                        Lifetime = 1.3f,
-                        AcceptInputValue = "Start",
-                        AngleValue = "90 0 0"
-                    },
-                    ["Random color trail"] = new TrailData
-                    {
-                        UniqueId = "trailrandomcolor",
-                        Lifetime = 1.3f,
-                        WidthValue = 1.0f,
-                        Color = ""
-                    },
-                    ["Green color trail"] = new TrailData
-                    {
-                        UniqueId = "trailgreencolor",
-                        Lifetime = 1.3f,
-                        WidthValue = 1.0f,
-                        Color = "0 255 0"
-                    }
-                }
-            }
-        };
-
-        try
-        {
-            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            File.WriteAllText(path, JsonSerializer.Serialize(config, JsonOptions));
-        }
-        catch (Exception ex)
-        {
-            Server.PrintToConsole($"[zModelsCustom] Error creating default trails config: {ex.Message}");
-        }
-
-        return config;
-    }
-
-    public TrailData? FindByUniqueId(string uniqueId)
-    {
-        foreach (var category in Categories.Values)
-        {
-            foreach (var trail in category.Values)
-            {
-                if (trail.UniqueId == uniqueId)
-                    return trail;
-            }
-        }
-        return null;
-    }
-}
-public class TrailData
-{
-    [JsonPropertyName("uniqueid")]
-    public string UniqueId { get; set; } = "";
-
-    [JsonPropertyName("model")]
-    public string Model { get; set; } = ""; // Particle model (.vpcf) - empty for beam trails
-
-    [JsonPropertyName("color")]
-    public string Color { get; set; } = ""; // "R G B" - empty for random/particle
-
-    [JsonPropertyName("lifetime")]
-    public float Lifetime { get; set; } = 1.3f;
-
-    [JsonPropertyName("widthValue")]
-    public float WidthValue { get; set; } = 1.0f;
-
-    [JsonPropertyName("acceptInputValue")]
-    public string AcceptInputValue { get; set; } = "Start";
-
-    [JsonPropertyName("angleValue")]
-    public string AngleValue { get; set; } = "90 0 0";
-
-    // Helper to determine if this is a particle or beam trail
-    [JsonIgnore]
-    public bool IsParticle => !string.IsNullOrEmpty(Model);
-}
-
-// Tracers Config (zTracers.json) - CS2-Store compatible
-public partial class TracersConfig
-{
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        WriteIndented = true,
-        PropertyNameCaseInsensitive = true
-    };
-
-    [GeneratedRegex(@"//.*|/\*[\s\S]*?\*/", RegexOptions.Compiled)]
-    private static partial Regex CommentPattern();
-
-    [JsonPropertyName("Tracer")]
-    public Dictionary<string, TracerData> Tracers { get; set; } = new();
-
-    public static TracersConfig Load(string moduleDirectory)
-    {
-        var path = GetConfigPath(moduleDirectory);
-
-        if (!File.Exists(path))
-            return CreateDefault(path);
-
-        try
-        {
-            var json = File.ReadAllText(path);
-            json = CommentPattern().Replace(json, "");
-            var config = JsonSerializer.Deserialize<TracersConfig>(json, JsonOptions);
-            return config ?? new TracersConfig();
-        }
-        catch (Exception ex)
-        {
-            Server.PrintToConsole($"[zModelsCustom] Error loading tracers config: {ex.Message}");
-            return new TracersConfig();
-        }
-    }
-
-    private static string GetConfigPath(string moduleDirectory) =>
-        Path.Combine(moduleDirectory, "../../configs/plugins/zModelsCustom/zTracers.json");
-
-    public static TracersConfig CreateDefault(string path)
-    {
-        var config = new TracersConfig
-        {
-            Tracers = new()
-            {
-                ["Energycirc Tracer"] = new TracerData
-                {
-                    UniqueId = "energycirctracer",
-                    Model = "particles/ui/status_levels/ui_status_level_8_energycirc.vpcf",
-                    Lifetime = 0.3f,
-                    AcceptInputValue = "Start"
-                }
-            }
-        };
-
-        try
-        {
-            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            File.WriteAllText(path, JsonSerializer.Serialize(config, JsonOptions));
-        }
-        catch (Exception ex)
-        {
-            Server.PrintToConsole($"[zModelsCustom] Error creating default tracers config: {ex.Message}");
-        }
-
-        return config;
-    }
-
-    public TracerData? FindByUniqueId(string uniqueId) =>
-        Tracers.Values.FirstOrDefault(t => t.UniqueId == uniqueId);
-}
-
-public class TracerData
-{
-    [JsonPropertyName("uniqueid")]
-    public string UniqueId { get; set; } = "";
-
-    [JsonPropertyName("model")]
-    public string Model { get; set; } = "";
-
-    [JsonPropertyName("lifetime")]
-    public float Lifetime { get; set; } = 0.3f;
-
-    [JsonPropertyName("acceptInputValue")]
-    public string AcceptInputValue { get; set; } = "Start";
-}
-
-// Sound Config for weapon fire sound overrides
+// Sound Config
 public class SoundConfig
 {
     [JsonPropertyName("enabled")]
@@ -762,4 +521,3 @@ public class OfficialSoundOverride
     [JsonPropertyName("target_event_unsilenced")]
     public string TargetEventUnsilenced { get; set; } = "";
 }
-

@@ -3,6 +3,7 @@ using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Modules.UserMessages;
 using CounterStrikeSharp.API.Modules.Commands;
 using CounterStrikeSharp.API.Modules.Utils;
+using CounterStrikeSharp.API.Modules.Admin;
 using zModelsCustom.Data;
 using zModelsCustom.Utils;
 
@@ -29,16 +30,14 @@ public class SoundManager
 
     public void UpdateModelsConfig()
     {
-        // Rebuild sound mappings when config is reloaded
         RebuildOfficialOverrides();
     }
 
     private void RebuildOfficialOverrides()
     {
         _overrideByItemDefIndex.Clear();
-        var soundConfig = zModelsCustom.Config.SoundConfig;
-        if (soundConfig?.OfficialOverrides == null)
-            return;
+        var soundConfig = zModelsCustom.Config?.SoundConfig;
+        if (soundConfig?.OfficialOverrides == null) return;
 
         foreach (var entry in soundConfig.OfficialOverrides)
         {
@@ -74,21 +73,18 @@ public class SoundManager
 
     public HookResult OnWeaponFireUserMessage(UserMessage userMessage)
     {
-        var soundConfig = zModelsCustom.Config.SoundConfig;
+        var soundConfig = zModelsCustom.Config?.SoundConfig;
         if (soundConfig == null || !soundConfig.Enabled)
             return HookResult.Continue;
 
         var forceMute = soundConfig.ForceMuteAllFireBullets;
 
         var playerHandle = (int)userMessage.ReadUInt("player");
-        if (playerHandle <= 0)
-            return HookResult.Continue;
+        if (playerHandle <= 0) return HookResult.Continue;
 
         var playerEntityIndex = playerHandle & EntityIndexMask;
         var shooter = _pawnCache.Find(playerEntityIndex);
-
-        if (shooter == null || !shooter.IsValid)
-            return HookResult.Continue;
+        if (shooter == null || !shooter.IsValid) return HookResult.Continue;
 
         var lastFire = _fireSoundCache.Get(shooter.Slot);
 
@@ -109,8 +105,7 @@ public class SoundManager
         if (lastFire == null)
         {
             var weapon = shooter.PlayerPawn?.Value?.WeaponServices?.ActiveWeapon?.Value;
-            if (weapon == null || !weapon.IsValid)
-                return HookResult.Continue;
+            if (weapon == null || !weapon.IsValid) return HookResult.Continue;
 
             if (!TryResolveFireEvents(shooter, weapon, null, out var customEvent, out var officialEvent, out var resolvedDefIndex))
             {
@@ -126,8 +121,7 @@ public class SoundManager
         var hasOfficial = !string.IsNullOrWhiteSpace(lastFire.OfficialEvent);
         if (!hasCustom && !hasOfficial)
         {
-            if (forceMute)
-                userMessage.Recipients.Clear();
+            if (forceMute) userMessage.Recipients.Clear();
             return HookResult.Continue;
         }
 
@@ -138,8 +132,7 @@ public class SoundManager
         {
             foreach (var recipient in userMessage.Recipients)
             {
-                if (recipient == null || !recipient.IsValid)
-                    continue;
+                if (recipient == null || !recipient.IsValid) continue;
 
                 if (hasCustom && IsCustomSoundEnabled(recipient))
                 {
@@ -169,19 +162,13 @@ public class SoundManager
         }
 
         if (customRecipients != null && hasCustom)
-        {
             shooter.EmitSound(lastFire.CustomEvent!, customRecipients);
-        }
 
         if (officialRecipients != null && hasOfficial)
-        {
             shooter.EmitSound(lastFire.OfficialEvent!, officialRecipients);
-        }
 
         if (forceMute || customRecipients != null || officialRecipients != null)
-        {
             userMessage.Recipients?.Clear();
-        }
 
         return HookResult.Continue;
     }
@@ -189,8 +176,7 @@ public class SoundManager
     public HookResult OnPlayerSpawn(EventPlayerSpawn @event, GameEventInfo info)
     {
         var player = @event.Userid;
-        if (player == null || !player.IsValid)
-            return HookResult.Continue;
+        if (player == null || !player.IsValid) return HookResult.Continue;
 
         _pawnCache.Update(player);
         return HookResult.Continue;
@@ -198,7 +184,6 @@ public class SoundManager
 
     public HookResult OnPlayerDisconnect(EventPlayerDisconnect @event, GameEventInfo info)
     {
-        // Cleanup handled by OnClientDisconnect to avoid duplicate work
         return HookResult.Continue;
     }
 
@@ -214,13 +199,10 @@ public class SoundManager
     public void OnClientPutInServer(int playerSlot)
     {
         var player = Utilities.GetPlayerFromSlot(playerSlot);
-        if (player == null || !player.IsValid || player.IsBot)
+        if (player == null || !player.IsValid || player.IsBot || player.SteamID == 0)
             return;
 
-        if (player.SteamID == 0)
-            return;
-
-        var soundConfig = zModelsCustom.Config.SoundConfig;
+        var soundConfig = zModelsCustom.Config?.SoundConfig;
         SetCustomSoundEnabledForPlayer(player, soundConfig?.CustomSoundDefaultEnabled ?? true);
         _pawnCache.Update(player);
 
@@ -230,8 +212,7 @@ public class SoundManager
     public void OnClientDisconnect(int playerSlot)
     {
         var player = Utilities.GetPlayerFromSlot(playerSlot);
-        if (player == null || !player.IsValid)
-            return;
+        if (player == null || !player.IsValid) return;
 
         _fireSoundCache.Clear(playerSlot);
         _pawnCache.Remove(player);
@@ -250,29 +231,25 @@ public class SoundManager
         officialEvent = null;
         itemDefIndex = (int)weapon.AttributeManager.Item.ItemDefinitionIndex;
 
-        // Get the weapon type from WeaponManager
         var weaponType = WeaponManager.GetDesignerName(weapon);
 
-        // First, try to get the model tracked on the weapon entity itself (for dropped weapons)
+        // Use cached config from WeaponManager instead of loading from disk
         WeaponModelData? modelData = null;
         var trackedModelId = zModelsCustom.WeaponManager.GetWeaponTrackedModelId(weapon);
         if (!string.IsNullOrEmpty(trackedModelId))
         {
-            modelData = GetModelDataByUniqueId(trackedModelId);
+            modelData = zModelsCustom.WeaponManager.GetModelsConfig().FindModelByUniqueId(trackedModelId);
         }
 
-        // Fallback: try to find custom weapon sound from player's equipped weapon
         modelData ??= zModelsCustom.WeaponManager.GetEquippedWeaponModel(player.SteamID, weaponType);
 
         if (modelData != null && !string.IsNullOrWhiteSpace(modelData.SoundEvent))
         {
-            // Weapon has a custom sound override
             customEvent = @event != null
                 ? WeaponSoundUtils.ResolveTargetEvent(@event, weapon, modelData.SoundEvent, modelData.SoundEventUnsilenced)
                 : WeaponSoundUtils.ResolveTargetEvent(weapon, modelData.SoundEvent, modelData.SoundEventUnsilenced);
         }
 
-        // Also check official overrides for fallback
         _overrideByItemDefIndex.TryGetValue(itemDefIndex, out var officialOverride);
 
         if (officialOverride == null)
@@ -299,26 +276,15 @@ public class SoundManager
         return !string.IsNullOrWhiteSpace(customEvent) || !string.IsNullOrWhiteSpace(officialEvent);
     }
 
-    /// <summary>
-    /// Resolves a WeaponModelData from a uniqueId by searching the WeaponModelsConfig.
-    /// </summary>
-    private static WeaponModelData? GetModelDataByUniqueId(string uniqueId)
-    {
-        var modelsConfig = WeaponModelsConfig.Load(zModelsCustom.Instance.ModuleDirectory);
-        return modelsConfig.FindModelByUniqueId(uniqueId);
-    }
-
     public void TrackWeaponSubclass(CBasePlayerWeapon weapon, string subclass)
     {
-        if (weapon == null || !weapon.IsValid || string.IsNullOrWhiteSpace(subclass))
-            return;
+        if (weapon == null || !weapon.IsValid || string.IsNullOrWhiteSpace(subclass)) return;
         _subclassByWeaponHandle[weapon.Handle] = subclass.Trim();
     }
 
     public void UntrackWeaponSubclass(CBasePlayerWeapon weapon)
     {
-        if (weapon == null)
-            return;
+        if (weapon == null) return;
         _subclassByWeaponHandle.Remove(weapon.Handle);
     }
 
@@ -328,8 +294,15 @@ public class SoundManager
 
     public void OnToggleCustomSound(CCSPlayerController? player, CommandInfo command)
     {
-        if (player == null || !player.IsValid || player.SteamID == 0)
+        if (player == null || !player.IsValid || player.SteamID == 0) return;
+
+        // Check configurable permission
+        var restrictPerm = zModelsCustom.Config?.RestrictPermission ?? "";
+        if (!string.IsNullOrEmpty(restrictPerm) && !AdminManager.PlayerHasPermissions(player, restrictPerm))
+        {
+            player.PrintToChat($"{zModelsCustom.Instance.Localizer["zModelsCustom.prefix"]} {zModelsCustom.Instance.Localizer["zModelsCustom.console_only"]}");
             return;
+        }
 
         var enabled = !IsCustomSoundEnabled(player);
         SetCustomSoundEnabledForPlayer(player, enabled);
@@ -344,9 +317,7 @@ public class SoundManager
 
     private void SetCustomSoundEnabledForPlayer(CCSPlayerController player, bool enabled)
     {
-        if (player == null || !player.IsValid)
-            return;
-
+        if (player == null || !player.IsValid) return;
         SetCustomSoundEnabled(player.SteamID, enabled);
         if (IsValidSlot(player.Slot))
             _customSoundEnabledBySlot[player.Slot] = enabled;
@@ -354,22 +325,16 @@ public class SoundManager
 
     private void ClearCustomSoundEnabledForPlayer(CCSPlayerController player)
     {
-        if (player == null)
-            return;
-
-        var soundConfig = zModelsCustom.Config.SoundConfig;
+        if (player == null) return;
+        var soundConfig = zModelsCustom.Config?.SoundConfig;
         if (IsValidSlot(player.Slot))
             _customSoundEnabledBySlot[player.Slot] = soundConfig?.CustomSoundDefaultEnabled ?? true;
     }
 
     private bool IsCustomSoundEnabled(CCSPlayerController player)
     {
-        if (player == null || !player.IsValid)
-            return false;
-
-        if (IsValidSlot(player.Slot))
-            return _customSoundEnabledBySlot[player.Slot];
-
+        if (player == null || !player.IsValid) return false;
+        if (IsValidSlot(player.Slot)) return _customSoundEnabledBySlot[player.Slot];
         return GetCustomSoundEnabled(player.SteamID);
     }
 
@@ -380,9 +345,7 @@ public class SoundManager
             if (_customSoundEnabledBySteamId.TryGetValue(steamId, out var enabled))
                 return enabled;
         }
-
-        var soundConfig = zModelsCustom.Config.SoundConfig;
-        return soundConfig?.CustomSoundDefaultEnabled ?? true;
+        return zModelsCustom.Config?.SoundConfig?.CustomSoundDefaultEnabled ?? true;
     }
 
     private void SetCustomSoundEnabled(ulong steamId, bool enabled)
@@ -406,9 +369,7 @@ public class SoundManager
         SetCustomSoundEnabled(steamId, enabled);
         foreach (var candidate in Utilities.GetPlayers())
         {
-            if (!candidate.IsValid || candidate.SteamID != steamId)
-                continue;
-
+            if (!candidate.IsValid || candidate.SteamID != steamId) continue;
             if (IsValidSlot(candidate.Slot))
                 _customSoundEnabledBySlot[candidate.Slot] = enabled;
             break;
@@ -419,11 +380,9 @@ public class SoundManager
     {
         foreach (var player in Utilities.GetPlayers())
         {
-            if (!player.IsValid || player.IsBot || player.SteamID == 0)
-                continue;
+            if (!player.IsValid || player.IsBot || player.SteamID == 0) continue;
 
             _pawnCache.Update(player);
-
             if (IsValidSlot(player.Slot))
                 _customSoundEnabledBySlot[player.Slot] = GetCustomSoundEnabled(player.SteamID);
 
@@ -439,18 +398,14 @@ public class SoundManager
 
     private async Task LoadCustomSoundSettingAsync(ulong steamId)
     {
-        if (steamId == 0)
-            return;
-
+        if (steamId == 0) return;
         var enabled = await zModelsCustom.Database.GetPlayerSoundEnabledAsync(steamId);
         Server.NextFrame(() => SetCustomSoundEnabledFromSteamId(steamId, enabled));
     }
 
     private Task SaveCustomSoundSettingAsync(ulong steamId, bool enabled)
     {
-        if (steamId == 0)
-            return Task.CompletedTask;
-
+        if (steamId == 0) return Task.CompletedTask;
         return zModelsCustom.Database.SavePlayerSoundEnabledAsync(steamId, enabled);
     }
 
