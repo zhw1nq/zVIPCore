@@ -1,12 +1,12 @@
 {
-  "zModelsCustom.prefix": " {gold}zSystems {silver}» ",
-  "zModelsCustom.console_only": "Lệnh này chỉ có thể sử dụng từ console.",
-  "zModelsCustom.reload_success": "Đã tải lại: {0} categories ({1} models), {2} loại vũ khí ({3} skins)",
-  "zModelsCustom.reload_error": "{darkred}Lỗi tải lại: {default}{0}",
-  "zModelsCustom.website_message": "{green}Truy cập website: {yellow}{0}",
-  "zModelsCustom.cooldown_remaining": "{darkred}Vui lòng đợi {yellow}{0}{darkred} giây trước khi reload.",
-  "zModelsCustom.kick_reason_spam": "Spam lệnh",
-  "zModelsCustom.sound_enabled": "{green}Âm thanh vũ khí custom {yellow}đã bật{green}.",
-  "zModelsCustom.sound_disabled": "{yellow}Âm thanh vũ khí custom {red}đã tắt{yellow}.",
-  "zModelsCustom.web_reload_success": "{green}Đã tải lại cấu hình thành công."
+  "zVIPCore.prefix": " {gold}zSystems {silver}» ",
+  "zVIPCore.console_only": "Lệnh này chỉ có thể sử dụng từ console.",
+  "zVIPCore.reload_success": "Đã tải lại: {0} categories ({1} models), {2} loại vũ khí ({3} skins)",
+  "zVIPCore.reload_error": "{darkred}Lỗi tải lại: {default}{0}",
+  "zVIPCore.website_message": "{green}Truy cập website: {yellow}{0}",
+  "zVIPCore.cooldown_remaining": "{darkred}Vui lòng đợi {yellow}{0}{darkred} giây trước khi reload.",
+  "zVIPCore.kick_reason_spam": "Spam lệnh",
+  "zVIPCore.sound_enabled": "{green}Âm thanh vũ khí custom {yellow}đã bật{green}.",
+  "zVIPCore.sound_disabled": "{yellow}Âm thanh vũ khí custom {red}đã tắt{yellow}.",
+  "zVIPCore.web_reload_success": "{green}Đã tải lại cấu hình thành công."
 }

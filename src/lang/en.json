@@ -1,12 +1,14 @@
 {
-  "zModelsCustom.prefix": " {gold}zSystems {silver}» ",
-  "zModelsCustom.console_only": "This command can only be used from console.",
-  "zModelsCustom.reload_success": "Reloaded: {0} player categories ({1} models), {2} weapon types ({3} skins)",
-  "zModelsCustom.reload_error": "{darkred}Error reloading: {silver}{0}",
-  "zModelsCustom.website_message": "{green}Visit our website: {yellow}{0}",
-  "zModelsCustom.cooldown_remaining": "{darkred}Please wait {yellow}{0}{darkred} seconds before reloading again.",
-  "zModelsCustom.kick_reason_spam": "Command spam detected",
-  "zModelsCustom.sound_enabled": "{green}Custom weapon sounds {yellow}enabled{green}.",
-  "zModelsCustom.sound_disabled": "{yellow}Custom weapon sounds {red}disabled{yellow}.",
-  "zModelsCustom.web_reload_success": "{green}Configuration reloaded successfully."
+  "zVIPCore.prefix": " {gold}zSystems {silver}» ",
+  "zVIPCore.console_only": "This command can only be used from console.",
+  "zVIPCore.reload_success": "Reloaded: {0} player categories ({1} models), {2} weapon types ({3} skins)",
+  "zVIPCore.reload_error": "{darkred}Error reloading: {silver}{0}",
+  "zVIPCore.website_message": "{green}Visit our website: {yellow}{0}",
+  "zVIPCore.cooldown_remaining": "{darkred}Please wait {yellow}{0}{darkred} seconds before reloading again.",
+  "zVIPCore.kick_reason_spam": "Command spam detected",
+  "zVIPCore.sound_enabled": "{green}Custom weapon sounds {yellow}enabled{green}.",
+  "zVIPCore.sound_disabled": "{yellow}Custom weapon sounds {red}disabled{yellow}.",
+  "zVIPCore.web_reload_success": "{green}Configuration reloaded successfully.",
+  "zVIPCore.mvp.chat.1": "{red}{0}{default} is the MVP of the round! Playing: {blue}{1}{default}.",
+  "zVIPCore.mvp.html.1": "<font color='red'>{0}</font> IS the MVP of the round!<br><b color='white'>━━━━━━━━━━━━━━━━━━━━━━━━<</b><br>Playing: <font color='blue'>{1}</font>"
 }

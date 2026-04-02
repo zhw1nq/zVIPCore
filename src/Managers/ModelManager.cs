@@ -3,7 +3,7 @@ using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Modules.Utils;
 using System.Drawing;
 
-namespace zModelsCustom;
+namespace zVIPCore;
 
 public class ModelManager
 {
@@ -71,14 +71,14 @@ public class ModelManager
         var steamId = player!.SteamID;
         var team = player.Team;
 
-        _ = zModelsCustom.SafeAsync(() => LoadAndApplyModelAsync(player, steamId, team));
+        _ = zVIPCore.SafeAsync(() => LoadAndApplyModelAsync(player, steamId, team));
 
         return HookResult.Continue;
     }
 
     private async Task LoadAndApplyModelAsync(CCSPlayerController player, ulong steamId, CsTeam team)
     {
-        var modelId = await zModelsCustom.Database.GetPlayerModelAsync(steamId, team);
+        var modelId = await zVIPCore.Database.GetPlayerModelAsync(steamId, team);
         if (modelId == null) return;
 
         // Use cached config instead of loading from disk every spawn
@@ -86,7 +86,7 @@ public class ModelManager
 
         if (model == null)
         {
-            await zModelsCustom.Database.RemovePlayerModelAsync(steamId, team);
+            await zVIPCore.Database.RemovePlayerModelAsync(steamId, team);
             return;
         }
 
@@ -99,9 +99,9 @@ public class ModelManager
 
         if (!IsModelSlotValid(model, player.Team))
         {
-            _ = zModelsCustom.SafeAsync(async () =>
+            _ = zVIPCore.SafeAsync(async () =>
             {
-                await zModelsCustom.Database.RemovePlayerModelAsync(steamId, team);
+                await zVIPCore.Database.RemovePlayerModelAsync(steamId, team);
                 Server.NextFrame(() =>
                 {
                     if (IsValidPlayer(player))
@@ -111,7 +111,7 @@ public class ModelManager
             return;
         }
 
-        zModelsCustom.Instance.AddTimer(0.1f, () =>
+        zVIPCore.Instance.AddTimer(0.1f, () =>
         {
             if (IsValidPlayer(player))
                 ApplyModel(player, model);

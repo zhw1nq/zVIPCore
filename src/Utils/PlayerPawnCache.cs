@@ -1,7 +1,7 @@
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 
-namespace zModelsCustom.Utils;
+namespace zVIPCore.Utils;
 
 internal sealed class PlayerPawnCache
 {

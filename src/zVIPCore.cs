@@ -8,20 +8,21 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Net.Http;
 
-namespace zModelsCustom;
+namespace zVIPCore;
 
-public class zModelsCustom : BasePlugin
+public class zVIPCore : BasePlugin
 {
-    public override string ModuleName => "zModelsCustom";
+    public override string ModuleName => "zVIPCore";
     public override string ModuleVersion => "2.0.0";
 
-    public static zModelsCustom Instance { get; private set; } = null!;
+    public static zVIPCore Instance { get; private set; } = null!;
     public static Config Config { get; private set; } = null!;
     public static Database Database { get; private set; } = null!;
     public static ModelManager ModelManager { get; private set; } = null!;
     public static WeaponManager WeaponManager { get; private set; } = null!;
     public static SmokeManager SmokeManager { get; private set; } = null!;
     public static SoundManager SoundManager { get; private set; } = null!;
+    public static MvpManager MvpManager { get; private set; } = null!;
 
     private readonly ConcurrentDictionary<ulong, ReloadInfo> _reloadTracking = new();
     private static readonly HttpClient _httpClient = new() { Timeout = TimeSpan.FromSeconds(15) };
@@ -29,6 +30,7 @@ public class zModelsCustom : BasePlugin
     // Cached local versions to avoid re-reading files
     private string _cachedModelsVersion = "";
     private string _cachedWeaponsVersion = "";
+    private string _cachedMvpsVersion = "";
 
     /// <summary>
     /// Wraps an async action with try-catch to prevent silent exception swallowing.
@@ -38,7 +40,7 @@ public class zModelsCustom : BasePlugin
         try { await action(); }
         catch (Exception ex)
         {
-            Server.PrintToConsole($"[zModelsCustom] Async error: {ex.Message}");
+            Server.PrintToConsole($"[zVIPCore] Async error: {ex.Message}");
         }
     }
 
@@ -51,15 +53,19 @@ public class zModelsCustom : BasePlugin
         WeaponManager = new WeaponManager();
         SmokeManager = new SmokeManager();
         SoundManager = new SoundManager();
+        MvpManager = new MvpManager();
 
         // Load configs and cache
         var playerModels = PlayerModelsConfig.Load(ModuleDirectory);
         var weaponModels = WeaponModelsConfig.Load(ModuleDirectory);
+        var mvpModels = MvpModelsConfig.Load(ModuleDirectory);
         ModelManager.UpdateConfig(playerModels);
         WeaponManager.UpdateModelsConfig(weaponModels);
+        MvpManager.UpdateModelsConfig(mvpModels);
         SoundManager.UpdateModelsConfig();
         _cachedModelsVersion = playerModels.Version;
         _cachedWeaponsVersion = weaponModels.Version;
+        _cachedMvpsVersion = mvpModels.Version;
 
         // Player model events
         RegisterEventHandler<EventPlayerSpawn>(ModelManager.OnPlayerSpawn);
@@ -75,6 +81,10 @@ public class zModelsCustom : BasePlugin
         RegisterEventHandler<EventPlayerDisconnect>(OnPlayerDisconnect);
         RegisterEventHandler<EventPlayerDisconnect>(SoundManager.OnPlayerDisconnect, HookMode.Post);
 
+        // MVP events
+        RegisterEventHandler<EventRoundStart>(MvpManager.OnRoundStart);
+        RegisterEventHandler<EventRoundMvp>(MvpManager.OnRoundMvp, HookMode.Pre);
+
         // Sound events
         RegisterListener<Listeners.OnMapStart>(SoundManager.OnMapStart);
         RegisterListener<Listeners.OnClientPutInServer>(SoundManager.OnClientPutInServer);
@@ -86,14 +96,17 @@ public class zModelsCustom : BasePlugin
         {
             var newPlayerModels = PlayerModelsConfig.Load(ModuleDirectory);
             var newWeaponModels = WeaponModelsConfig.Load(ModuleDirectory);
+            var newMvpModels = MvpModelsConfig.Load(ModuleDirectory);
             ModelManager.PrecacheModels(newPlayerModels);
             ModelManager.UpdateConfig(newPlayerModels);
             WeaponManager.PrecacheModels();
             WeaponManager.UpdateModelsConfig(newWeaponModels);
+            MvpManager.UpdateModelsConfig(newMvpModels);
             SoundManager.UpdateModelsConfig();
             WeaponManager.ClearSubclassCache();
             _cachedModelsVersion = newPlayerModels.Version;
             _cachedWeaponsVersion = newWeaponModels.Version;
+            _cachedMvpsVersion = newMvpModels.Version;
         });
 
         RegisterCommands();
@@ -116,14 +129,17 @@ public class zModelsCustom : BasePlugin
         // Console-only: reload weapon DB data for a player
         AddCommand("css_zweapons", "Reload player weapons from DB (Console only)", Command_ZWeapons);
 
+        // Console-only: reload MVP DB data for a player
+        AddCommand("css_zmvps", "Reload player mvps from DB (Console only)", Command_ZMvps);
+
         // Client+Server: reload JSON configs + CDN fetch
-        AddCommand("css_reloadmodel", "Reload model/weapon JSON configs from CDN", Command_ReloadModel);
+        AddCommand("css_reloadmodel", "Reload model/weapon/mvp JSON configs from CDN", Command_ReloadModel);
 
         // Sound toggle with configurable permission
         AddCommand("css_zrestrict", "Toggle custom weapon sounds", SoundManager.OnToggleCustomSound);
 
         // Website commands
-        foreach (var cmd in new[] { "svip", "vip", "md", "mds" })
+        foreach (var cmd in new[] { "svip", "vip", "md", "mds", "mvp", "zmvp", "zmvps" })
         {
             AddCommand($"css_{cmd}", "Open models website", Command_ModelsWebsite);
         }
@@ -139,13 +155,13 @@ public class zModelsCustom : BasePlugin
 
         if (info.ArgCount < 3 || info.GetArg(1).ToLowerInvariant() != "reload")
         {
-            Server.PrintToConsole("[zModelsCustom] Usage: css_zmodels reload <steamid>");
+            Server.PrintToConsole("[zVIPCore] Usage: css_zmodels reload <steamid>");
             return;
         }
 
         if (!ulong.TryParse(info.GetArg(2), out var steamId))
         {
-            Server.PrintToConsole($"[zModelsCustom] Invalid SteamID: {info.GetArg(2)}");
+            Server.PrintToConsole($"[zVIPCore] Invalid SteamID: {info.GetArg(2)}");
             return;
         }
 
@@ -158,9 +174,9 @@ public class zModelsCustom : BasePlugin
                 var target = FindPlayerBySteamId(steamId);
                 if (target != null)
                 {
-                    target.PrintToChat($"{Localizer["zModelsCustom.prefix"]} {Localizer["zModelsCustom.web_reload_success"]}");
+                    target.PrintToChat($"{Localizer["zVIPCore.prefix"]} {Localizer["zVIPCore.web_reload_success"]}");
                 }
-                Server.PrintToConsole($"[zModelsCustom] Reloaded model data for {steamId}");
+                Server.PrintToConsole($"[zVIPCore] Reloaded model data for {steamId}");
             });
         });
     }
@@ -171,13 +187,13 @@ public class zModelsCustom : BasePlugin
 
         if (info.ArgCount < 3 || info.GetArg(1).ToLowerInvariant() != "reload")
         {
-            Server.PrintToConsole("[zModelsCustom] Usage: css_zweapons reload <steamid>");
+            Server.PrintToConsole("[zVIPCore] Usage: css_zweapons reload <steamid>");
             return;
         }
 
         if (!ulong.TryParse(info.GetArg(2), out var steamId))
         {
-            Server.PrintToConsole($"[zModelsCustom] Invalid SteamID: {info.GetArg(2)}");
+            Server.PrintToConsole($"[zVIPCore] Invalid SteamID: {info.GetArg(2)}");
             return;
         }
 
@@ -193,9 +209,41 @@ public class zModelsCustom : BasePlugin
                 if (target != null)
                 {
                     WeaponManager.RefreshPlayerWeapons(target);
-                    target.PrintToChat($"{Localizer["zModelsCustom.prefix"]} {Localizer["zModelsCustom.web_reload_success"]}");
+                    target.PrintToChat($"{Localizer["zVIPCore.prefix"]} {Localizer["zVIPCore.web_reload_success"]}");
                 }
-                Server.PrintToConsole($"[zModelsCustom] Reloaded weapon data for {steamId}");
+                Server.PrintToConsole($"[zVIPCore] Reloaded weapon data for {steamId}");
+            });
+        });
+    }
+
+    private void Command_ZMvps(CCSPlayerController? player, CommandInfo info)
+    {
+        if (player != null) { PrintConsoleOnly(player); return; }
+
+        if (info.ArgCount < 3 || info.GetArg(1).ToLowerInvariant() != "reload")
+        {
+            Server.PrintToConsole("[zVIPCore] Usage: css_zmvps reload <steamid>");
+            return;
+        }
+
+        if (!ulong.TryParse(info.GetArg(2), out var steamId))
+        {
+            Server.PrintToConsole($"[zVIPCore] Invalid SteamID: {info.GetArg(2)}");
+            return;
+        }
+
+        Database.ClearPlayerCache(steamId);
+        _ = SafeAsync(async () =>
+        {
+            await Database.PreloadAllPlayerDataAsync(steamId);
+            Server.NextFrame(() =>
+            {
+                var target = FindPlayerBySteamId(steamId);
+                if (target != null)
+                {
+                    target.PrintToChat($"{Localizer["zVIPCore.prefix"]} {Localizer["zVIPCore.web_reload_success"]}");
+                }
+                Server.PrintToConsole($"[zVIPCore] Reloaded MVP data for {steamId}");
             });
         });
     }
@@ -211,6 +259,7 @@ public class zModelsCustom : BasePlugin
         {
             bool modelsUpdated = await TryFetchCdnJson(Config.ModelsJsonFilename);
             bool weaponsUpdated = await TryFetchCdnJson(Config.WeaponsJsonFilename);
+            bool mvpsUpdated = await TryFetchCdnJson(Config.MvpsJsonFilename);
 
             Server.NextFrame(() =>
             {
@@ -218,14 +267,17 @@ public class zModelsCustom : BasePlugin
                 {
                     var newPlayerModels = PlayerModelsConfig.Load(ModuleDirectory);
                     var newWeaponModels = WeaponModelsConfig.Load(ModuleDirectory);
+                    var newMvpModels = MvpModelsConfig.Load(ModuleDirectory);
 
                     ModelManager.PrecacheModels(newPlayerModels);
                     ModelManager.UpdateConfig(newPlayerModels);
                     WeaponManager.PrecacheModels();
                     WeaponManager.UpdateModelsConfig(newWeaponModels);
+                    MvpManager.UpdateModelsConfig(newMvpModels);
                     SoundManager.UpdateModelsConfig();
                     _cachedModelsVersion = newPlayerModels.Version;
                     _cachedWeaponsVersion = newWeaponModels.Version;
+                    _cachedMvpsVersion = newMvpModels.Version;
 
                     var playerCategories = newPlayerModels.Categories.Count;
                     var playerTotal = newPlayerModels.Categories.Values.Sum(c => c.Count);
@@ -240,22 +292,22 @@ public class zModelsCustom : BasePlugin
                         catch { /* skip */ }
                     }
 
-                    var msg = Localizer["zModelsCustom.reload_success", playerCategories, playerTotal, weaponCollections, weaponTotal];
+                    var msg = Localizer["zVIPCore.reload_success", playerCategories, playerTotal, weaponCollections, weaponTotal];
 
                     if (player?.IsValid == true)
                     {
-                        player.PrintToChat($"{Localizer["zModelsCustom.prefix"]} {msg}");
-                        player.PrintToChat($"{Localizer["zModelsCustom.prefix"]} Refreshed {refreshed} players");
+                        player.PrintToChat($"{Localizer["zVIPCore.prefix"]} {msg}");
+                        player.PrintToChat($"{Localizer["zVIPCore.prefix"]} Refreshed {refreshed} players");
                     }
 
-                    var fetchStatus = modelsUpdated || weaponsUpdated ? " (CDN updated)" : " (no CDN changes)";
-                    Server.PrintToConsole($"[zModelsCustom] Reloaded configs{fetchStatus}. Refreshed {refreshed} players.");
+                    var fetchStatus = modelsUpdated || weaponsUpdated || mvpsUpdated ? " (CDN updated)" : " (no CDN changes)";
+                    Server.PrintToConsole($"[zVIPCore] Reloaded configs{fetchStatus}. Refreshed {refreshed} players.");
                 }
                 catch (Exception ex)
                 {
                     if (player?.IsValid == true)
-                        player.PrintToChat($"{Localizer["zModelsCustom.prefix"]} {Localizer["zModelsCustom.reload_error", ex.Message]}");
-                    Server.PrintToConsole($"[zModelsCustom] Error reloading: {ex.Message}");
+                        player.PrintToChat($"{Localizer["zVIPCore.prefix"]} {Localizer["zVIPCore.reload_error", ex.Message]}");
+                    Server.PrintToConsole($"[zVIPCore] Error reloading: {ex.Message}");
                 }
             });
         });
@@ -295,7 +347,10 @@ public class zModelsCustom : BasePlugin
                 return false;
 
             // Compare with cached local version
-            var localVersion = filename == Config.ModelsJsonFilename ? _cachedModelsVersion : _cachedWeaponsVersion;
+            string localVersion = "";
+            if (filename == Config.ModelsJsonFilename) localVersion = _cachedModelsVersion;
+            else if (filename == Config.WeaponsJsonFilename) localVersion = _cachedWeaponsVersion;
+            else if (filename == Config.MvpsJsonFilename) localVersion = _cachedMvpsVersion;
 
             if (remoteVersion == localVersion)
                 return false;
@@ -308,8 +363,10 @@ public class zModelsCustom : BasePlugin
             // Update cached version (thread-safe: only read by main thread in NextFrame)
             if (filename == Config.ModelsJsonFilename)
                 _cachedModelsVersion = remoteVersion;
-            else
+            else if (filename == Config.WeaponsJsonFilename)
                 _cachedWeaponsVersion = remoteVersion;
+            else if (filename == Config.MvpsJsonFilename)
+                _cachedMvpsVersion = remoteVersion;
 
             // NOTE: Do NOT call Server.PrintToConsole here — we're on a background thread.
             // Logging happens in the Server.NextFrame callback in Command_ReloadModel.
@@ -343,18 +400,18 @@ public class zModelsCustom : BasePlugin
 
             if (reloadInfo.CommandHistory.Count >= Config.AntiSpamThreshold)
             {
-                Server.ExecuteCommand($"kickid {player.UserId} \"{Localizer["zModelsCustom.kick_reason_spam"]}\"");
+                Server.ExecuteCommand($"kickid {player.UserId} \"{Localizer["zVIPCore.kick_reason_spam"]}\"");
                 reloadInfo.CommandHistory.Clear();
                 return;
             }
 
-            player.PrintToChat($" {Localizer["zModelsCustom.prefix"]}{Localizer["zModelsCustom.website_message", Config.WebsiteUrl]}");
+            player.PrintToChat($" {Localizer["zVIPCore.prefix"]}{Localizer["zVIPCore.website_message", Config.WebsiteUrl]}");
 
             var timeSinceLastReload = currentTime - reloadInfo.LastReloadTime;
             if (timeSinceLastReload < Config.ReloadCooldownSeconds)
             {
                 var remaining = (int)(Config.ReloadCooldownSeconds - timeSinceLastReload);
-                player.PrintToChat($"{Localizer["zModelsCustom.prefix"]} {Localizer["zModelsCustom.cooldown_remaining", remaining]}");
+                player.PrintToChat($"{Localizer["zVIPCore.prefix"]} {Localizer["zVIPCore.cooldown_remaining", remaining]}");
                 return;
             }
 
@@ -369,7 +426,7 @@ public class zModelsCustom : BasePlugin
                 Server.NextFrame(() =>
                 {
                     if (player.IsValid)
-                        player.PrintToChat($"{Localizer["zModelsCustom.prefix"]} {Localizer["zModelsCustom.web_reload_success"]}");
+                        player.PrintToChat($"{Localizer["zVIPCore.prefix"]} {Localizer["zVIPCore.web_reload_success"]}");
                 });
             });
         }
@@ -403,6 +460,7 @@ public class zModelsCustom : BasePlugin
     {
         Database?.Dispose();
         WeaponManager.ClearSubclassCache();
+        MvpManager?.Dispose();
         _reloadTracking.Clear();
     }
 
@@ -416,7 +474,7 @@ public class zModelsCustom : BasePlugin
     private void PrintConsoleOnly(CCSPlayerController player)
     {
         if (player.IsValid)
-            player.PrintToChat($"{Localizer["zModelsCustom.prefix"]} {Localizer["zModelsCustom.console_only"]}");
+            player.PrintToChat($"{Localizer["zVIPCore.prefix"]} {Localizer["zVIPCore.console_only"]}");
     }
 
     private sealed class ReloadInfo

@@ -4,10 +4,10 @@ using CounterStrikeSharp.API.Modules.UserMessages;
 using CounterStrikeSharp.API.Modules.Commands;
 using CounterStrikeSharp.API.Modules.Utils;
 using CounterStrikeSharp.API.Modules.Admin;
-using zModelsCustom.Data;
-using zModelsCustom.Utils;
+using zVIPCore.Data;
+using zVIPCore.Utils;
 
-namespace zModelsCustom;
+namespace zVIPCore;
 
 public class SoundManager
 {
@@ -36,7 +36,7 @@ public class SoundManager
     private void RebuildOfficialOverrides()
     {
         _overrideByItemDefIndex.Clear();
-        var soundConfig = zModelsCustom.Config?.SoundConfig;
+        var soundConfig = zVIPCore.Config?.SoundConfig;
         if (soundConfig?.OfficialOverrides == null) return;
 
         foreach (var entry in soundConfig.OfficialOverrides)
@@ -73,7 +73,7 @@ public class SoundManager
 
     public HookResult OnWeaponFireUserMessage(UserMessage userMessage)
     {
-        var soundConfig = zModelsCustom.Config?.SoundConfig;
+        var soundConfig = zVIPCore.Config?.SoundConfig;
         if (soundConfig == null || !soundConfig.Enabled)
             return HookResult.Continue;
 
@@ -202,11 +202,11 @@ public class SoundManager
         if (player == null || !player.IsValid || player.IsBot || player.SteamID == 0)
             return;
 
-        var soundConfig = zModelsCustom.Config?.SoundConfig;
+        var soundConfig = zVIPCore.Config?.SoundConfig;
         SetCustomSoundEnabledForPlayer(player, soundConfig?.CustomSoundDefaultEnabled ?? true);
         _pawnCache.Update(player);
 
-        _ = zModelsCustom.SafeAsync(() => LoadCustomSoundSettingAsync(player.SteamID));
+        _ = zVIPCore.SafeAsync(() => LoadCustomSoundSettingAsync(player.SteamID));
     }
 
     public void OnClientDisconnect(int playerSlot)
@@ -235,13 +235,13 @@ public class SoundManager
 
         // Use cached config from WeaponManager instead of loading from disk
         WeaponModelData? modelData = null;
-        var trackedModelId = zModelsCustom.WeaponManager.GetWeaponTrackedModelId(weapon);
+        var trackedModelId = zVIPCore.WeaponManager.GetWeaponTrackedModelId(weapon);
         if (!string.IsNullOrEmpty(trackedModelId))
         {
-            modelData = zModelsCustom.WeaponManager.GetModelsConfig().FindModelByUniqueId(trackedModelId);
+            modelData = zVIPCore.WeaponManager.GetModelsConfig().FindModelByUniqueId(trackedModelId);
         }
 
-        modelData ??= zModelsCustom.WeaponManager.GetEquippedWeaponModel(player.SteamID, weaponType);
+        modelData ??= zVIPCore.WeaponManager.GetEquippedWeaponModel(player.SteamID, weaponType);
 
         if (modelData != null && !string.IsNullOrWhiteSpace(modelData.SoundEvent))
         {
@@ -297,21 +297,21 @@ public class SoundManager
         if (player == null || !player.IsValid || player.SteamID == 0) return;
 
         // Check configurable permission
-        var restrictPerm = zModelsCustom.Config?.RestrictPermission ?? "";
+        var restrictPerm = zVIPCore.Config?.RestrictPermission ?? "";
         if (!string.IsNullOrEmpty(restrictPerm) && !AdminManager.PlayerHasPermissions(player, restrictPerm))
         {
-            player.PrintToChat($"{zModelsCustom.Instance.Localizer["zModelsCustom.prefix"]} {zModelsCustom.Instance.Localizer["zModelsCustom.console_only"]}");
+            player.PrintToChat($"{zVIPCore.Instance.Localizer["zVIPCore.prefix"]} {zVIPCore.Instance.Localizer["zVIPCore.console_only"]}");
             return;
         }
 
         var enabled = !IsCustomSoundEnabled(player);
         SetCustomSoundEnabledForPlayer(player, enabled);
-        _ = zModelsCustom.SafeAsync(() => SaveCustomSoundSettingAsync(player.SteamID, enabled));
+        _ = zVIPCore.SafeAsync(() => SaveCustomSoundSettingAsync(player.SteamID, enabled));
 
-        var prefix = zModelsCustom.Instance.Localizer["zModelsCustom.prefix"];
+        var prefix = zVIPCore.Instance.Localizer["zVIPCore.prefix"];
         var message = enabled
-            ? zModelsCustom.Instance.Localizer["zModelsCustom.sound_enabled"]
-            : zModelsCustom.Instance.Localizer["zModelsCustom.sound_disabled"];
+            ? zVIPCore.Instance.Localizer["zVIPCore.sound_enabled"]
+            : zVIPCore.Instance.Localizer["zVIPCore.sound_disabled"];
         player.PrintToChat($"{prefix} {message}");
     }
 
@@ -326,7 +326,7 @@ public class SoundManager
     private void ClearCustomSoundEnabledForPlayer(CCSPlayerController player)
     {
         if (player == null) return;
-        var soundConfig = zModelsCustom.Config?.SoundConfig;
+        var soundConfig = zVIPCore.Config?.SoundConfig;
         if (IsValidSlot(player.Slot))
             _customSoundEnabledBySlot[player.Slot] = soundConfig?.CustomSoundDefaultEnabled ?? true;
     }
@@ -345,7 +345,7 @@ public class SoundManager
             if (_customSoundEnabledBySteamId.TryGetValue(steamId, out var enabled))
                 return enabled;
         }
-        return zModelsCustom.Config?.SoundConfig?.CustomSoundDefaultEnabled ?? true;
+        return zVIPCore.Config?.SoundConfig?.CustomSoundDefaultEnabled ?? true;
     }
 
     private void SetCustomSoundEnabled(ulong steamId, bool enabled)
@@ -386,7 +386,7 @@ public class SoundManager
             if (IsValidSlot(player.Slot))
                 _customSoundEnabledBySlot[player.Slot] = GetCustomSoundEnabled(player.SteamID);
 
-            _ = zModelsCustom.SafeAsync(() => LoadCustomSoundSettingAsync(player.SteamID));
+            _ = zVIPCore.SafeAsync(() => LoadCustomSoundSettingAsync(player.SteamID));
         }
     }
 
@@ -399,14 +399,14 @@ public class SoundManager
     private async Task LoadCustomSoundSettingAsync(ulong steamId)
     {
         if (steamId == 0) return;
-        var enabled = await zModelsCustom.Database.GetPlayerSoundEnabledAsync(steamId);
+        var enabled = await zVIPCore.Database.GetPlayerSoundEnabledAsync(steamId);
         Server.NextFrame(() => SetCustomSoundEnabledFromSteamId(steamId, enabled));
     }
 
     private Task SaveCustomSoundSettingAsync(ulong steamId, bool enabled)
     {
         if (steamId == 0) return Task.CompletedTask;
-        return zModelsCustom.Database.SavePlayerSoundEnabledAsync(steamId, enabled);
+        return zVIPCore.Database.SavePlayerSoundEnabledAsync(steamId, enabled);
     }
 
     #endregion

@@ -2,7 +2,7 @@ using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using System.Collections.Concurrent;
 
-namespace zModelsCustom;
+namespace zVIPCore;
 
 public class WeaponManager
 {
@@ -93,13 +93,13 @@ public class WeaponManager
         }
         else
         {
-            _ = zModelsCustom.SafeAsync(() => LoadAndApplyWeaponSubclassAsync(steamId, player, weapon, weaponDesignerName));
+            _ = zVIPCore.SafeAsync(() => LoadAndApplyWeaponSubclassAsync(steamId, player, weapon, weaponDesignerName));
         }
     }
 
     private async Task LoadAndApplyWeaponSubclassAsync(ulong steamId, CCSPlayerController player, CBasePlayerWeapon weapon, string weaponName)
     {
-        var modelId = await zModelsCustom.Database.GetPlayerWeaponAsync(steamId, weaponName);
+        var modelId = await zVIPCore.Database.GetPlayerWeaponAsync(steamId, weaponName);
         if (modelId == null) return;
 
         var weapons = _playerWeapons.GetOrAdd(steamId, _ => new ConcurrentDictionary<string, string>());
@@ -108,7 +108,7 @@ public class WeaponManager
         var modelData = _modelsConfig.FindModelByUniqueId(modelId);
         if (modelData == null)
         {
-            await zModelsCustom.Database.RemovePlayerWeaponAsync(steamId, weaponName);
+            await zVIPCore.Database.RemovePlayerWeaponAsync(steamId, weaponName);
             return;
         }
 
@@ -177,7 +177,7 @@ public class WeaponManager
         if (string.IsNullOrEmpty(newSubclass)) return;
 
         OldSubclassByHandle[weapon.Handle] = oldSubclass;
-        zModelsCustom.SoundManager?.TrackWeaponSubclass(weapon, newSubclass);
+        zVIPCore.SoundManager?.TrackWeaponSubclass(weapon, newSubclass);
         weapon.AcceptInput("ChangeSubclass", weapon, weapon, newSubclass);
 
         if (!string.IsNullOrEmpty(customName))
@@ -191,7 +191,7 @@ public class WeaponManager
 
         weapon.AcceptInput("ChangeSubclass", weapon, weapon, oldSubclass);
         OldSubclassByHandle.TryRemove(weapon.Handle, out _);
-        zModelsCustom.SoundManager?.UntrackWeaponSubclass(weapon);
+        zVIPCore.SoundManager?.UntrackWeaponSubclass(weapon);
     }
 
     public static void ClearSubclassCache()

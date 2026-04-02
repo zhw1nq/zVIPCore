@@ -3,7 +3,7 @@ using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using CounterStrikeSharp.API;
 
-namespace zModelsCustom;
+namespace zVIPCore;
 
 public partial class Config
 {
@@ -21,6 +21,12 @@ public partial class Config
 
     [JsonPropertyName("weapons_json_filename")]
     public string WeaponsJsonFilename { get; set; } = "zWeapons.json";
+
+    [JsonPropertyName("mvps_json_filename")]
+    public string MvpsJsonFilename { get; set; } = "zMVPs.json";
+
+    [JsonPropertyName("center_html_duration")]
+    public float CenterHtmlDuration { get; set; } = 4.0f;
 
     [JsonPropertyName("restrict_permission")]
     public string RestrictPermission { get; set; } = "";
@@ -56,6 +62,10 @@ public partial class Config
         if (!File.Exists(weaponsPath))
             WeaponModelsConfig.CreateDefault(weaponsPath);
 
+        var mvpsPath = Path.Combine(configDir, config.MvpsJsonFilename);
+        if (!File.Exists(mvpsPath))
+            MvpModelsConfig.CreateDefault(mvpsPath);
+
         return config;
     }
 
@@ -68,13 +78,13 @@ public partial class Config
         }
         catch (Exception ex)
         {
-            Server.PrintToConsole($"[zModelsCustom] Error loading config: {ex.Message}");
+            Server.PrintToConsole($"[zVIPCore] Error loading config: {ex.Message}");
             return new Config();
         }
     }
 
     private static string GetConfigPath(string moduleDirectory) =>
-        Path.Combine(moduleDirectory, "../../configs/plugins/zModelsCustom/zConfig.json");
+        Path.Combine(moduleDirectory, "../../configs/plugins/zVIPCore/zConfig.json");
 
     public static string GetConfigDirectory(string moduleDirectory) =>
         Path.GetDirectoryName(GetConfigPath(moduleDirectory))!;
@@ -91,7 +101,7 @@ public partial class Config
         }
         catch (Exception ex)
         {
-            Server.PrintToConsole($"[zModelsCustom] Error creating default config: {ex.Message}");
+            Server.PrintToConsole($"[zVIPCore] Error creating default config: {ex.Message}");
         }
 
         return defaultConfig;
@@ -149,7 +159,7 @@ public partial class PlayerModelsConfig
     public static PlayerModelsConfig Load(string moduleDirectory)
     {
         var configDir = Config.GetConfigDirectory(moduleDirectory);
-        var config = zModelsCustom.Config;
+        var config = zVIPCore.Config;
         var path = Path.Combine(configDir, config?.ModelsJsonFilename ?? "zModels.json");
 
         if (!File.Exists(path))
@@ -164,7 +174,7 @@ public partial class PlayerModelsConfig
         }
         catch (Exception ex)
         {
-            Server.PrintToConsole($"[zModelsCustom] Error loading player models: {ex.Message}");
+            Server.PrintToConsole($"[zVIPCore] Error loading player models: {ex.Message}");
             return new PlayerModelsConfig();
         }
     }
@@ -197,7 +207,7 @@ public partial class PlayerModelsConfig
         }
         catch (Exception ex)
         {
-            Server.PrintToConsole($"[zModelsCustom] Error creating default player models: {ex.Message}");
+            Server.PrintToConsole($"[zVIPCore] Error creating default player models: {ex.Message}");
         }
 
         return defaultModels;
@@ -271,7 +281,7 @@ public partial class WeaponModelsConfig
     public static WeaponModelsConfig Load(string moduleDirectory)
     {
         var configDir = Config.GetConfigDirectory(moduleDirectory);
-        var config = zModelsCustom.Config;
+        var config = zVIPCore.Config;
         var path = Path.Combine(configDir, config?.WeaponsJsonFilename ?? "zWeapons.json");
 
         if (!File.Exists(path))
@@ -302,7 +312,7 @@ public partial class WeaponModelsConfig
         }
         catch (Exception ex)
         {
-            Server.PrintToConsole($"[zModelsCustom] Error loading weapon models: {ex.Message}");
+            Server.PrintToConsole($"[zVIPCore] Error loading weapon models: {ex.Message}");
             return new WeaponModelsConfig();
         }
     }
@@ -375,7 +385,7 @@ public partial class WeaponModelsConfig
         }
         catch (Exception ex)
         {
-            Server.PrintToConsole($"[zModelsCustom] Error creating default weapon models: {ex.Message}");
+            Server.PrintToConsole($"[zVIPCore] Error creating default weapon models: {ex.Message}");
         }
 
         return new WeaponModelsConfig();
@@ -521,3 +531,110 @@ public class OfficialSoundOverride
     [JsonPropertyName("target_event_unsilenced")]
     public string TargetEventUnsilenced { get; set; } = "";
 }
+
+// MVP Models Config (zMVPs.json)
+public partial class MvpModelsConfig
+{
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        WriteIndented = true,
+        PropertyNameCaseInsensitive = true
+    };
+
+    [GeneratedRegex(@"(?<=^|\s)//.*|/\*[\s\S]*?\*/", RegexOptions.Compiled | RegexOptions.Multiline)]
+    private static partial Regex CommentPattern();
+
+    [JsonPropertyName("version")]
+    public string Version { get; set; } = "0.0.1";
+
+    [JsonPropertyName("Categories")]
+    public Dictionary<string, Dictionary<string, MvpModelData>> Categories { get; set; } = new();
+
+    public static MvpModelsConfig Load(string moduleDirectory)
+    {
+        var configDir = Config.GetConfigDirectory(moduleDirectory);
+        var config = zVIPCore.Config;
+        var path = Path.Combine(configDir, config?.MvpsJsonFilename ?? "zMVPs.json");
+
+        if (!File.Exists(path))
+            return CreateDefaultModels(path);
+
+        try
+        {
+            var json = File.ReadAllText(path);
+            json = CommentPattern().Replace(json, "");
+            var result = JsonSerializer.Deserialize<MvpModelsConfig>(json, JsonOptions);
+            return result?.Categories?.Count > 0 ? result : new MvpModelsConfig();
+        }
+        catch (Exception ex)
+        {
+            Server.PrintToConsole($"[zVIPCore] Error loading MVP models: {ex.Message}");
+            return new MvpModelsConfig();
+        }
+    }
+
+    private static MvpModelsConfig CreateDefaultModels(string path)
+    {
+        var defaultModels = new MvpModelsConfig
+        {
+            Version = "0.0.1",
+            Categories = new()
+            {
+                ["Example Category"] = new()
+                {
+                    ["Example MVP"] = new()
+                    {
+                        MvpName = "Example MVP",
+                        MvpSound = "sounds/example_mvp.vsnd",
+                        ShowChatMessage = true,
+                        ShowHtmlMessage = true
+                    }
+                }
+            }
+        };
+
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            var json = JsonSerializer.Serialize(defaultModels, JsonOptions);
+            File.WriteAllText(path, json);
+        }
+        catch (Exception ex)
+        {
+            Server.PrintToConsole($"[zVIPCore] Error creating default MVP models: {ex.Message}");
+        }
+
+        return defaultModels;
+    }
+
+    public static void CreateDefault(string path) => CreateDefaultModels(path);
+
+    public MvpModelData? FindMvpBySoundAndName(string mvpName, string mvpSound)
+    {
+        foreach (var category in Categories.Values)
+        {
+            foreach (var mvp in category.Values)
+            {
+                if (mvp.MvpName == mvpName && mvp.MvpSound == mvpSound)
+                    return mvp;
+            }
+        }
+        return null;
+    }
+}
+
+public class MvpModelData
+{
+    [JsonPropertyName("mvp_name")]
+    public string MvpName { get; set; } = "";
+
+    [JsonPropertyName("mvp_sound")]
+    public string MvpSound { get; set; } = "";
+
+    [JsonPropertyName("show_chat_message")]
+    public bool ShowChatMessage { get; set; } = true;
+
+    [JsonPropertyName("show_html_message")]
+    public bool ShowHtmlMessage { get; set; } = true;
+}
+

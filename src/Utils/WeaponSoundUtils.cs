@@ -1,7 +1,7 @@
 using System.Reflection;
 using CounterStrikeSharp.API.Core;
 
-namespace zModelsCustom.Utils;
+namespace zVIPCore.Utils;
 
 internal static class WeaponSoundUtils
 {

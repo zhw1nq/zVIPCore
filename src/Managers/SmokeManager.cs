@@ -3,7 +3,7 @@ using CounterStrikeSharp.API.Core;
 using System.Collections.Concurrent;
 using System.Globalization;
 
-namespace zModelsCustom;
+namespace zVIPCore;
 
 public class SmokeManager
 {
@@ -83,7 +83,7 @@ public class SmokeManager
     /// </summary>
     public async Task LoadPlayerSmokeColorAsync(ulong steamId)
     {
-        var color = await zModelsCustom.Database.GetPlayerSmokeColorAsync(steamId);
+        var color = await zVIPCore.Database.GetPlayerSmokeColorAsync(steamId);
         if (!string.IsNullOrEmpty(color))
         {
             _playerSmokeColors[steamId] = color;

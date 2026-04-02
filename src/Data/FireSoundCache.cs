@@ -1,4 +1,4 @@
-namespace zModelsCustom.Data;
+namespace zVIPCore.Data;
 
 internal sealed class FireSoundCache
 {
