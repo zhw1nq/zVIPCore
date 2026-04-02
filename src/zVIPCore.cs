@@ -49,64 +49,89 @@ public class zVIPCore : BasePlugin
         Instance = this;
         Config = Config.Load(ModuleDirectory);
         Database = new Database(Config.DatabaseConfig);
-        ModelManager = new ModelManager();
-        WeaponManager = new WeaponManager();
-        SmokeManager = new SmokeManager();
-        SoundManager = new SoundManager();
-        MvpManager = new MvpManager();
+        
+        if (Config.Modules.PlayerModelsEnabled)
+        {
+            ModelManager = new ModelManager();
+            var playerModels = PlayerModelsConfig.Load(ModuleDirectory);
+            ModelManager.UpdateConfig(playerModels);
+            RegisterEventHandler<EventPlayerSpawn>(ModelManager.OnPlayerSpawn);
+            _cachedModelsVersion = playerModels.Version;
+        }
+        
+        if (Config.Modules.WeaponsEnabled)
+        {
+            WeaponManager = new WeaponManager();
+            var weaponModels = WeaponModelsConfig.Load(ModuleDirectory);
+            WeaponManager.UpdateModelsConfig(weaponModels);
+            RegisterEventHandler<EventItemEquip>(WeaponManager.OnItemEquip);
+            _cachedWeaponsVersion = weaponModels.Version;
+        }
+        
+        if (Config.Modules.MvpsEnabled)
+        {
+            MvpManager = new MvpManager();
+            var mvpModels = MvpModelsConfig.Load(ModuleDirectory);
+            MvpManager.UpdateModelsConfig(mvpModels);
+            RegisterEventHandler<EventRoundStart>(MvpManager.OnRoundStart);
+            RegisterEventHandler<EventRoundMvp>(MvpManager.OnRoundMvp, HookMode.Pre);
+            _cachedMvpsVersion = mvpModels.Version;
+        }
+        
+        if (Config.Modules.SoundsEnabled)
+        {
+            SoundManager = new SoundManager();
+            SoundManager.UpdateModelsConfig();
+            RegisterEventHandler<EventPlayerSpawn>(SoundManager.OnPlayerSpawn, HookMode.Post);
+            RegisterEventHandler<EventWeaponFire>(SoundManager.OnWeaponFire, HookMode.Pre);
+            RegisterListener<Listeners.OnMapStart>(SoundManager.OnMapStart);
+            RegisterListener<Listeners.OnClientPutInServer>(SoundManager.OnClientPutInServer);
+            RegisterListener<Listeners.OnClientDisconnect>(SoundManager.OnClientDisconnect);
+            HookUserMessage(452, SoundManager.OnWeaponFireUserMessage, HookMode.Pre);
+            RegisterEventHandler<EventPlayerDisconnect>(SoundManager.OnPlayerDisconnect, HookMode.Post);
+        }
 
-        // Load configs and cache
-        var playerModels = PlayerModelsConfig.Load(ModuleDirectory);
-        var weaponModels = WeaponModelsConfig.Load(ModuleDirectory);
-        var mvpModels = MvpModelsConfig.Load(ModuleDirectory);
-        ModelManager.UpdateConfig(playerModels);
-        WeaponManager.UpdateModelsConfig(weaponModels);
-        MvpManager.UpdateModelsConfig(mvpModels);
-        SoundManager.UpdateModelsConfig();
-        _cachedModelsVersion = playerModels.Version;
-        _cachedWeaponsVersion = weaponModels.Version;
-        _cachedMvpsVersion = mvpModels.Version;
+        if (Config.Modules.SmokesEnabled)
+        {
+            SmokeManager = new SmokeManager();
+        }
 
-        // Player model events
-        RegisterEventHandler<EventPlayerSpawn>(ModelManager.OnPlayerSpawn);
-        RegisterEventHandler<EventPlayerSpawn>(SoundManager.OnPlayerSpawn, HookMode.Post);
-
-        // Weapon events
-        RegisterListener<Listeners.OnEntityCreated>(OnEntityCreated);
-        RegisterEventHandler<EventItemEquip>(WeaponManager.OnItemEquip);
-        RegisterEventHandler<EventWeaponFire>(SoundManager.OnWeaponFire, HookMode.Pre);
-
+        // Weapon/Smoke events
+        if (Config.Modules.WeaponsEnabled || Config.Modules.SmokesEnabled)
+            RegisterListener<Listeners.OnEntityCreated>(OnEntityCreated);
         // Common events
         RegisterEventHandler<EventPlayerConnectFull>(Database.OnPlayerConnectFull);
         RegisterEventHandler<EventPlayerDisconnect>(OnPlayerDisconnect);
-        RegisterEventHandler<EventPlayerDisconnect>(SoundManager.OnPlayerDisconnect, HookMode.Post);
-
-        // MVP events
-        RegisterEventHandler<EventRoundStart>(MvpManager.OnRoundStart);
-        RegisterEventHandler<EventRoundMvp>(MvpManager.OnRoundMvp, HookMode.Pre);
-
-        // Sound events
-        RegisterListener<Listeners.OnMapStart>(SoundManager.OnMapStart);
-        RegisterListener<Listeners.OnClientPutInServer>(SoundManager.OnClientPutInServer);
-        RegisterListener<Listeners.OnClientDisconnect>(SoundManager.OnClientDisconnect);
-        HookUserMessage(452, SoundManager.OnWeaponFireUserMessage, HookMode.Pre);
 
         // Map start config reload
         RegisterListener<Listeners.OnMapStart>(mapName =>
         {
-            var newPlayerModels = PlayerModelsConfig.Load(ModuleDirectory);
-            var newWeaponModels = WeaponModelsConfig.Load(ModuleDirectory);
-            var newMvpModels = MvpModelsConfig.Load(ModuleDirectory);
-            ModelManager.PrecacheModels(newPlayerModels);
-            ModelManager.UpdateConfig(newPlayerModels);
-            WeaponManager.PrecacheModels();
-            WeaponManager.UpdateModelsConfig(newWeaponModels);
-            MvpManager.UpdateModelsConfig(newMvpModels);
-            SoundManager.UpdateModelsConfig();
-            WeaponManager.ClearSubclassCache();
-            _cachedModelsVersion = newPlayerModels.Version;
-            _cachedWeaponsVersion = newWeaponModels.Version;
-            _cachedMvpsVersion = newMvpModels.Version;
+            if (Config.Modules.PlayerModelsEnabled)
+            {
+                var newPlayerModels = PlayerModelsConfig.Load(ModuleDirectory);
+                ModelManager?.PrecacheModels(newPlayerModels);
+                ModelManager?.UpdateConfig(newPlayerModels);
+                _cachedModelsVersion = newPlayerModels.Version;
+            }
+            
+            if (Config.Modules.WeaponsEnabled)
+            {
+                var newWeaponModels = WeaponModelsConfig.Load(ModuleDirectory);
+                WeaponManager?.PrecacheModels();
+                WeaponManager?.UpdateModelsConfig(newWeaponModels);
+                WeaponManager.ClearSubclassCache();
+                _cachedWeaponsVersion = newWeaponModels.Version;
+            }
+            
+            if (Config.Modules.MvpsEnabled)
+            {
+                var newMvpModels = MvpModelsConfig.Load(ModuleDirectory);
+                MvpManager?.UpdateModelsConfig(newMvpModels);
+                _cachedMvpsVersion = newMvpModels.Version;
+            }
+                
+            if (Config.Modules.SoundsEnabled)
+                SoundManager?.UpdateModelsConfig();
         });
 
         RegisterCommands();
@@ -124,27 +149,29 @@ public class zVIPCore : BasePlugin
     private void RegisterCommands()
     {
         // Console-only: reload model DB data for a player
-        AddCommand("css_zmodels", "Reload player models from DB (Console only)", Command_ZModels);
+        if (Config.Modules.PlayerModelsEnabled)
+            AddCommand("css_zmodels", "Reload player models from DB (Console only)", Command_ZModels);
 
         // Console-only: reload weapon DB data for a player
-        AddCommand("css_zweapons", "Reload player weapons from DB (Console only)", Command_ZWeapons);
+        if (Config.Modules.WeaponsEnabled)
+            AddCommand("css_zweapons", "Reload player weapons from DB (Console only)", Command_ZWeapons);
 
         // Console-only: reload MVP DB data for a player
-        AddCommand("css_zmvps", "Reload player mvps from DB (Console only)", Command_ZMvps);
+        if (Config.Modules.MvpsEnabled)
+            AddCommand("css_zmvps", "Reload player mvps from DB (Console only)", Command_ZMvps);
 
         // Client+Server: reload JSON configs + CDN fetch
         AddCommand("css_reloadmodel", "Reload model/weapon/mvp JSON configs from CDN", Command_ReloadModel);
 
         // Sound toggle with configurable permission
-        AddCommand("css_zrestrict", "Toggle custom weapon sounds", SoundManager.OnToggleCustomSound);
+        if (Config.Modules.SoundsEnabled)
+            AddCommand("css_zrestrict", "Toggle custom weapon sounds", SoundManager.OnToggleCustomSound);
 
         // Website commands
         foreach (var cmd in new[] { "svip", "vip", "md", "mds", "mvp", "zmvp", "zmvps" })
         {
             AddCommand($"css_{cmd}", "Open models website", Command_ModelsWebsite);
         }
-
-
     }
 
     #region Console Commands: css_zmodels / css_zweapons
@@ -197,7 +224,7 @@ public class zVIPCore : BasePlugin
             return;
         }
 
-        WeaponManager.ClearPlayerData(steamId);
+        WeaponManager?.ClearPlayerData(steamId);
         Database.ClearPlayerCache(steamId);
 
         _ = SafeAsync(async () =>
@@ -208,7 +235,7 @@ public class zVIPCore : BasePlugin
                 var target = FindPlayerBySteamId(steamId);
                 if (target != null)
                 {
-                    WeaponManager.RefreshPlayerWeapons(target);
+                    WeaponManager?.RefreshPlayerWeapons(target);
                     target.PrintToChat($"{Localizer["zVIPCore.prefix"]} {Localizer["zVIPCore.web_reload_success"]}");
                 }
                 Server.PrintToConsole($"[zVIPCore] Reloaded weapon data for {steamId}");
@@ -265,31 +292,44 @@ public class zVIPCore : BasePlugin
             {
                 try
                 {
-                    var newPlayerModels = PlayerModelsConfig.Load(ModuleDirectory);
-                    var newWeaponModels = WeaponModelsConfig.Load(ModuleDirectory);
-                    var newMvpModels = MvpModelsConfig.Load(ModuleDirectory);
+                    int playerCategories = 0, playerTotal = 0, weaponCollections = 0, weaponTotal = 0;
 
-                    ModelManager.PrecacheModels(newPlayerModels);
-                    ModelManager.UpdateConfig(newPlayerModels);
-                    WeaponManager.PrecacheModels();
-                    WeaponManager.UpdateModelsConfig(newWeaponModels);
-                    MvpManager.UpdateModelsConfig(newMvpModels);
-                    SoundManager.UpdateModelsConfig();
-                    _cachedModelsVersion = newPlayerModels.Version;
-                    _cachedWeaponsVersion = newWeaponModels.Version;
-                    _cachedMvpsVersion = newMvpModels.Version;
-
-                    var playerCategories = newPlayerModels.Categories.Count;
-                    var playerTotal = newPlayerModels.Categories.Values.Sum(c => c.Count);
-                    var weaponCollections = newWeaponModels.Weapons.Count;
-                    var weaponTotal = newWeaponModels.GetTotalSkinsCount();
-
-                    // Refresh all connected players
-                    var refreshed = 0;
-                    foreach (var p in Utilities.GetPlayers().Where(p => p?.IsBot == false && p.IsValid))
+                    if (Config.Modules.PlayerModelsEnabled)
                     {
-                        try { WeaponManager.RefreshPlayerWeapons(p); refreshed++; }
-                        catch { /* skip */ }
+                        var newPlayerModels = PlayerModelsConfig.Load(ModuleDirectory);
+                        ModelManager?.PrecacheModels(newPlayerModels);
+                        ModelManager?.UpdateConfig(newPlayerModels);
+                        _cachedModelsVersion = newPlayerModels.Version;
+                        playerCategories = newPlayerModels.Categories.Count;
+                        playerTotal = newPlayerModels.Categories.Values.Sum(c => c.Count);
+                    }
+                    if (Config.Modules.WeaponsEnabled)
+                    {
+                        var newWeaponModels = WeaponModelsConfig.Load(ModuleDirectory);
+                        WeaponManager?.PrecacheModels();
+                        WeaponManager?.UpdateModelsConfig(newWeaponModels);
+                        _cachedWeaponsVersion = newWeaponModels.Version;
+                        weaponCollections = newWeaponModels.Weapons.Count;
+                        weaponTotal = newWeaponModels.GetTotalSkinsCount();
+                    }
+                    if (Config.Modules.MvpsEnabled)
+                    {
+                        var newMvpModels = MvpModelsConfig.Load(ModuleDirectory);
+                        MvpManager?.UpdateModelsConfig(newMvpModels);
+                        _cachedMvpsVersion = newMvpModels.Version;
+                    }
+                    if (Config.Modules.SoundsEnabled)
+                        SoundManager?.UpdateModelsConfig();
+
+                    // Refresh all connected players for weapons
+                    var refreshed = 0;
+                    if (Config.Modules.WeaponsEnabled)
+                    {
+                        foreach (var p in Utilities.GetPlayers().Where(p => p?.IsBot == false && p.IsValid))
+                        {
+                            try { WeaponManager?.RefreshPlayerWeapons(p); refreshed++; }
+                            catch { /* skip */ }
+                        }
                     }
 
                     var msg = Localizer["zVIPCore.reload_success", playerCategories, playerTotal, weaponCollections, weaponTotal];
@@ -418,7 +458,7 @@ public class zVIPCore : BasePlugin
             reloadInfo.LastReloadTime = currentTime;
 
             Database.ClearPlayerCache(steamId);
-            WeaponManager.ClearPlayerData(steamId);
+            WeaponManager?.ClearPlayerData(steamId);
 
             _ = SafeAsync(async () =>
             {
@@ -438,8 +478,8 @@ public class zVIPCore : BasePlugin
 
     private void OnEntityCreated(CEntityInstance entity)
     {
-        WeaponManager.OnEntityCreated(entity);
-        SmokeManager.OnEntityCreated(entity);
+        if (Config.Modules.WeaponsEnabled) WeaponManager?.OnEntityCreated(entity);
+        if (Config.Modules.SmokesEnabled) SmokeManager?.OnEntityCreated(entity);
     }
 
     private HookResult OnPlayerDisconnect(EventPlayerDisconnect @event, GameEventInfo info)
@@ -449,8 +489,8 @@ public class zVIPCore : BasePlugin
 
         var steamId = player.SteamID;
         Database.ClearPlayerCache(steamId);
-        WeaponManager.ClearPlayerData(steamId);
-        SmokeManager.ClearPlayerData(steamId);
+        if (Config.Modules.WeaponsEnabled) WeaponManager?.ClearPlayerData(steamId);
+        if (Config.Modules.SmokesEnabled) SmokeManager?.ClearPlayerData(steamId);
         _reloadTracking.TryRemove(steamId, out _);
 
         return HookResult.Continue;

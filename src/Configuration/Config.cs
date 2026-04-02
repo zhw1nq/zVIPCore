@@ -10,6 +10,9 @@ public partial class Config
     [JsonPropertyName("database")]
     public DatabaseConfig DatabaseConfig { get; set; } = new();
 
+    [JsonPropertyName("modules")]
+    public ModulesConfig Modules { get; set; } = new();
+
     [JsonPropertyName("website_url")]
     public string WebsiteUrl { get; set; } = "https://example.com/models";
 
@@ -136,6 +139,24 @@ public class DatabaseConfig
 
     [JsonPropertyName("command_timeout")]
     public int CommandTimeout { get; set; } = 30;
+}
+
+public class ModulesConfig
+{
+    [JsonPropertyName("player_models_enabled")]
+    public bool PlayerModelsEnabled { get; set; } = true;
+
+    [JsonPropertyName("weapons_enabled")]
+    public bool WeaponsEnabled { get; set; } = true;
+
+    [JsonPropertyName("smokes_enabled")]
+    public bool SmokesEnabled { get; set; } = true;
+
+    [JsonPropertyName("sounds_enabled")]
+    public bool SoundsEnabled { get; set; } = true;
+
+    [JsonPropertyName("mvps_enabled")]
+    public bool MvpsEnabled { get; set; } = true;
 }
 
 // Player Models Config (zModels.json)
