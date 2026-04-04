@@ -25,11 +25,13 @@ public partial class Config
     [JsonPropertyName("weapons_json_filename")]
     public string WeaponsJsonFilename { get; set; } = "zWeapons.json";
 
-    [JsonPropertyName("mvps_json_filename")]
-    public string MvpsJsonFilename { get; set; } = "zMVPs.json";
+    [JsonPropertyName("mvp_json_filename")]
+    public string MvpJsonFilename { get; set; } = "zMVP.json";
+
+
 
     [JsonPropertyName("center_html_duration")]
-    public float CenterHtmlDuration { get; set; } = 4.0f;
+    public float CenterHtmlDuration { get; set; } = 7.0f;
 
     [JsonPropertyName("restrict_permission")]
     public string RestrictPermission { get; set; } = "";
@@ -45,6 +47,9 @@ public partial class Config
 
     [JsonPropertyName("sound")]
     public SoundConfig SoundConfig { get; set; } = new();
+
+    [JsonPropertyName("mvp")]
+    public MvpConfig Mvp { get; set; } = new();
 
     public static Config Load(string moduleDirectory)
     {
@@ -64,10 +69,6 @@ public partial class Config
         var weaponsPath = Path.Combine(configDir, config.WeaponsJsonFilename);
         if (!File.Exists(weaponsPath))
             WeaponModelsConfig.CreateDefault(weaponsPath);
-
-        var mvpsPath = Path.Combine(configDir, config.MvpsJsonFilename);
-        if (!File.Exists(mvpsPath))
-            MvpModelsConfig.CreateDefault(mvpsPath);
 
         return config;
     }
@@ -155,8 +156,8 @@ public class ModulesConfig
     [JsonPropertyName("sounds_enabled")]
     public bool SoundsEnabled { get; set; } = true;
 
-    [JsonPropertyName("mvps_enabled")]
-    public bool MvpsEnabled { get; set; } = true;
+    [JsonPropertyName("mvp_enabled")]
+    public bool MvpEnabled { get; set; } = true;
 }
 
 // Player Models Config (zModels.json)
@@ -553,109 +554,261 @@ public class OfficialSoundOverride
     public string TargetEventUnsilenced { get; set; } = "";
 }
 
-// MVP Models Config (zMVPs.json)
-public partial class MvpModelsConfig
+// MVP Config
+public class MvpConfig
 {
-    private static readonly JsonSerializerOptions JsonOptions = new()
+    [JsonPropertyName("disable_default_mvp")]
+    public bool DisableDefaultMvp { get; set; } = true;
+
+    [JsonPropertyName("center_html_duration")]
+    public int CenterHtmlDuration { get; set; } = 7;
+
+    [JsonPropertyName("sound_duration")]
+    public float SoundDuration { get; set; } = 10.0f;
+}
+
+// MVP Settings Config (zMVP.json)
+public class MvpSettingsConfig
+{
+    [JsonPropertyName("Version")]
+    public string Version { get; set; } = "1.0.0";
+
+    [JsonPropertyName("MVPSettings")]
+    public Dictionary<string, CategorySettings> MVPSettings { get; set; } = new();
+}
+
+public class CategorySettings
+{
+    [JsonPropertyName("CategoryFlags")]
+    public List<string> CategoryFlags { get; set; } = new();
+
+    [JsonPropertyName("MVPs")]
+    public Dictionary<string, MvpItemSettings> MVPs { get; set; } = new();
+}
+
+public class MvpItemSettings
+{
+    [JsonPropertyName("MVPName")]
+    public string MVPName { get; set; } = string.Empty;
+
+    [JsonPropertyName("MVPSound")]
+    public string MVPSound { get; set; } = string.Empty;
+
+    [JsonPropertyName("EnablePreview")]
+    public bool EnablePreview { get; set; } = true;
+
+    [JsonPropertyName("ShowChatMessage")]
+    public bool ShowChatMessage { get; set; } = true;
+
+    [JsonPropertyName("ShowHtmlMessage")]
+    public bool ShowHtmlMessage { get; set; } = true;
+
+    [JsonPropertyName("SteamID")]
+    public string SteamID { get; set; } = string.Empty;
+
+    [JsonPropertyName("Flags")]
+    public List<string> Flags { get; set; } = new();
+}
+
+internal static class MvpJsonOptions
+{
+    public static readonly JsonSerializerOptions Read = new()
     {
-        WriteIndented = true,
-        PropertyNameCaseInsensitive = true
+        PropertyNameCaseInsensitive = true,
+        ReadCommentHandling = JsonCommentHandling.Skip,
+        AllowTrailingCommas = true
     };
 
-    [GeneratedRegex(@"(?<=^|\s)//.*|/\*[\s\S]*?\*/", RegexOptions.Compiled | RegexOptions.Multiline)]
-    private static partial Regex CommentPattern();
-
-    [JsonPropertyName("version")]
-    public string Version { get; set; } = "0.0.1";
-
-    [JsonPropertyName("Categories")]
-    public Dictionary<string, Dictionary<string, MvpModelData>> Categories { get; set; } = new();
-
-    public static MvpModelsConfig Load(string moduleDirectory)
+    public static readonly JsonSerializerOptions Write = new()
     {
-        var configDir = Config.GetConfigDirectory(moduleDirectory);
+        WriteIndented = true,
+        DefaultIgnoreCondition = JsonIgnoreCondition.Never
+    };
+}
+
+public static class MvpSettingsLoader
+{
+    private static readonly HttpClient HttpClient = new();
+
+    static MvpSettingsLoader()
+    {
+        HttpClient.Timeout = TimeSpan.FromSeconds(10);
+        HttpClient.DefaultRequestHeaders.CacheControl = new System.Net.Http.Headers.CacheControlHeaderValue { NoCache = true, NoStore = true };
+        HttpClient.DefaultRequestHeaders.Add("Pragma", "no-cache");
+    }
+
+    private static string GetMvpSettingsPath()
+    {
+        var configDir = Config.GetConfigDirectory(zVIPCore.Instance.ModuleDirectory);
         var config = zVIPCore.Config;
-        var path = Path.Combine(configDir, config?.MvpsJsonFilename ?? "zMVPs.json");
+        return Path.Combine(configDir, config?.MvpJsonFilename ?? "zMVP.json");
+    }
 
-        if (!File.Exists(path))
-            return CreateDefaultModels(path);
+    public static async Task<MvpSettingsConfig> LoadOrFetchAsync()
+    {
+        var mvpSettingsPath = GetMvpSettingsPath();
+        MvpSettingsConfig? localConfig = null;
 
+        if (File.Exists(mvpSettingsPath))
+            localConfig = LoadFromFile(mvpSettingsPath);
+
+        var config = zVIPCore.Config;
+        string cdnUrl = config.CdnBaseUrl.TrimEnd('/') + "/" + config.MvpJsonFilename;
+
+        if (!string.IsNullOrWhiteSpace(cdnUrl))
+            try
+            {
+                Console.WriteLine($"[zVIPCore] Checking for MVP settings updates from CDN: {cdnUrl}");
+                var cdnConfig = await FetchFromCDNAsync(cdnUrl);
+
+                if (cdnConfig != null)
+                {
+                    if (localConfig == null || cdnConfig.Version != localConfig.Version)
+                    {
+                        Console.WriteLine($"[zVIPCore] MVP version changed: {cdnConfig.Version} (local: {localConfig?.Version ?? "none"})");
+                        SaveToFile(cdnConfig, mvpSettingsPath);
+                        return cdnConfig;
+                    }
+                    else
+                    {
+                        Console.WriteLine($"[zVIPCore] MVP settings are up to date (version: {localConfig.Version})");
+                        return localConfig;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[zVIPCore] Failed to fetch MVP settings from CDN: {ex.Message}");
+            }
+
+        if (localConfig != null)
+        {
+            Console.WriteLine("[zVIPCore] Using local MVP settings file");
+            return localConfig;
+        }
+
+        Console.WriteLine("[zVIPCore] Creating default MVP settings file");
+        var defaultConfig = CreateDefaultMVPSettings();
+        SaveToFile(defaultConfig, mvpSettingsPath);
+        return defaultConfig;
+    }
+
+    public static MvpSettingsConfig LoadFromLocal()
+    {
+        var mvpSettingsPath = GetMvpSettingsPath();
+        if (File.Exists(mvpSettingsPath))
+        {
+            var config = LoadFromFile(mvpSettingsPath);
+            if (config != null) return config;
+        }
+        return new MvpSettingsConfig();
+    }
+
+    private static async Task<MvpSettingsConfig?> FetchFromCDNAsync(string cdnUrl)
+    {
         try
         {
-            var json = File.ReadAllText(path);
-            json = CommentPattern().Replace(json, "");
-            var result = JsonSerializer.Deserialize<MvpModelsConfig>(json, JsonOptions);
-            return result?.Categories?.Count > 0 ? result : new MvpModelsConfig();
+            var bustUrl = cdnUrl + (cdnUrl.Contains('?') ? "&" : "?") + $"t={DateTimeOffset.UtcNow.ToUnixTimeSeconds()}";
+            var response = await HttpClient.GetAsync(bustUrl);
+            response.EnsureSuccessStatusCode();
+            string jsonContent = await response.Content.ReadAsStringAsync();
+            return JsonSerializer.Deserialize<MvpSettingsConfig>(jsonContent, MvpJsonOptions.Read);
         }
-        catch (Exception ex)
+        catch
         {
-            Server.PrintToConsole($"[zVIPCore] Error loading MVP models: {ex.Message}");
-            return new MvpModelsConfig();
+            return null;
         }
     }
 
-    private static MvpModelsConfig CreateDefaultModels(string path)
+    private static MvpSettingsConfig? LoadFromFile(string path)
     {
-        var defaultModels = new MvpModelsConfig
+        try
         {
-            Version = "0.0.1",
-            Categories = new()
+            string configText = File.ReadAllText(path);
+            return JsonSerializer.Deserialize<MvpSettingsConfig>(configText, MvpJsonOptions.Read);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[zVIPCore] Error loading MVP settings file: {ex.Message}");
+            return null;
+        }
+    }
+
+    private static void SaveToFile(MvpSettingsConfig config, string path)
+    {
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.WriteAllText(path, JsonSerializer.Serialize(config, MvpJsonOptions.Write));
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[zVIPCore] Error saving MVP settings file: {ex.Message}");
+        }
+    }
+
+    private static MvpSettingsConfig CreateDefaultMVPSettings()
+    {
+        return new MvpSettingsConfig
+        {
+            Version = "1.0.0",
+            MVPSettings = new Dictionary<string, CategorySettings>
             {
-                ["Example Category"] = new()
                 {
-                    ["Example MVP"] = new()
+                    "PUBLIC MVP", new CategorySettings
                     {
-                        MvpName = "Example MVP",
-                        MvpSound = "sounds/example_mvp.vsnd",
-                        ShowChatMessage = true,
-                        ShowHtmlMessage = true
+                        CategoryFlags = new List<string>(),
+                        MVPs = new Dictionary<string, MvpItemSettings>
+                        {
+                            {
+                                "mvp.1", new MvpItemSettings
+                                {
+                                    MVPName = "Ai Dua Em Ve",
+                                    MVPSound = "MVP.001_ai_dua_em_ve",
+                                    EnablePreview = true,
+                                    ShowChatMessage = true,
+                                    ShowHtmlMessage = true,
+                                    SteamID = "",
+                                    Flags = new List<string>()
+                                }
+                            },
+                            {
+                                "mvp.2", new MvpItemSettings
+                                {
+                                    MVPName = "Babe Get My Gun",
+                                    MVPSound = "MVP.001_babegetmygun",
+                                    EnablePreview = true,
+                                    ShowChatMessage = true,
+                                    ShowHtmlMessage = true,
+                                    SteamID = "",
+                                    Flags = new List<string>()
+                                }
+                            }
+                        }
+                    }
+                },
+                {
+                    "VIP MVP", new CategorySettings
+                    {
+                        CategoryFlags = new List<string> { "@css/vip" },
+                        MVPs = new Dictionary<string, MvpItemSettings>
+                        {
+                            {
+                                "mvp.vip.1", new MvpItemSettings
+                                {
+                                    MVPName = "Despacito Mixi",
+                                    MVPSound = "MVP.001F_despacito_mixi",
+                                    EnablePreview = true,
+                                    ShowChatMessage = true,
+                                    ShowHtmlMessage = true,
+                                    SteamID = "",
+                                    Flags = new List<string>()
+                                }
+                            }
+                        }
                     }
                 }
             }
         };
-
-        try
-        {
-            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            var json = JsonSerializer.Serialize(defaultModels, JsonOptions);
-            File.WriteAllText(path, json);
-        }
-        catch (Exception ex)
-        {
-            Server.PrintToConsole($"[zVIPCore] Error creating default MVP models: {ex.Message}");
-        }
-
-        return defaultModels;
-    }
-
-    public static void CreateDefault(string path) => CreateDefaultModels(path);
-
-    public MvpModelData? FindMvpBySoundAndName(string mvpName, string mvpSound)
-    {
-        foreach (var category in Categories.Values)
-        {
-            foreach (var mvp in category.Values)
-            {
-                if (mvp.MvpName == mvpName && mvp.MvpSound == mvpSound)
-                    return mvp;
-            }
-        }
-        return null;
     }
 }
-
-public class MvpModelData
-{
-    [JsonPropertyName("mvp_name")]
-    public string MvpName { get; set; } = "";
-
-    [JsonPropertyName("mvp_sound")]
-    public string MvpSound { get; set; } = "";
-
-    [JsonPropertyName("show_chat_message")]
-    public bool ShowChatMessage { get; set; } = true;
-
-    [JsonPropertyName("show_html_message")]
-    public bool ShowHtmlMessage { get; set; } = true;
-}
-

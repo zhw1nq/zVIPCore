@@ -23,6 +23,8 @@ public class zVIPCore : BasePlugin
     public static SmokeManager SmokeManager { get; private set; } = null!;
     public static SoundManager SoundManager { get; private set; } = null!;
     public static MvpManager MvpManager { get; private set; } = null!;
+    public static MvpSettingsConfig MvpSettings { get; set; } = new();
+
 
     private readonly ConcurrentDictionary<ulong, ReloadInfo> _reloadTracking = new();
     private static readonly HttpClient _httpClient = new() { Timeout = TimeSpan.FromSeconds(15) };
@@ -30,8 +32,7 @@ public class zVIPCore : BasePlugin
     // Cached local versions to avoid re-reading files
     private string _cachedModelsVersion = "";
     private string _cachedWeaponsVersion = "";
-    private string _cachedMvpsVersion = "";
-
+    private string _cachedMvpVersion = "";
     /// <summary>
     /// Wraps an async action with try-catch to prevent silent exception swallowing.
     /// </summary>
@@ -40,7 +41,7 @@ public class zVIPCore : BasePlugin
         try { await action(); }
         catch (Exception ex)
         {
-            Server.PrintToConsole($"[zVIPCore] Async error: {ex.Message}");
+            Console.WriteLine($"[zVIPCore] Async error: {ex.Message}");
         }
     }
 
@@ -68,16 +69,7 @@ public class zVIPCore : BasePlugin
             _cachedWeaponsVersion = weaponModels.Version;
         }
         
-        if (Config.Modules.MvpsEnabled)
-        {
-            MvpManager = new MvpManager();
-            var mvpModels = MvpModelsConfig.Load(ModuleDirectory);
-            MvpManager.UpdateModelsConfig(mvpModels);
-            RegisterEventHandler<EventRoundStart>(MvpManager.OnRoundStart);
-            RegisterEventHandler<EventRoundMvp>(MvpManager.OnRoundMvp, HookMode.Pre);
-            _cachedMvpsVersion = mvpModels.Version;
-        }
-        
+
         if (Config.Modules.SoundsEnabled)
         {
             SoundManager = new SoundManager();
@@ -96,12 +88,29 @@ public class zVIPCore : BasePlugin
             SmokeManager = new SmokeManager();
         }
 
+        if (Config.Modules.MvpEnabled)
+        {
+            MvpManager = new MvpManager();
+            System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(typeof(MvpSettingsLoader).TypeHandle);
+            _ = SafeAsync(async () =>
+            {
+                MvpSettings = await MvpSettingsLoader.LoadOrFetchAsync();
+                _cachedMvpVersion = MvpSettings.Version;
+                Console.WriteLine($"[zVIPCore] MVP settings loaded successfully (version: {MvpSettings.Version})");
+            });
+            RegisterEventHandler<EventRoundMvp>(MvpManager.OnRoundMvp, HookMode.Pre);
+            RegisterEventHandler<EventRoundStart>(MvpManager.OnRoundStart);
+            RegisterEventHandler<EventCsWinPanelMatch>(MvpManager.OnMapEnd);
+        }
+
         // Weapon/Smoke events
         if (Config.Modules.WeaponsEnabled || Config.Modules.SmokesEnabled)
             RegisterListener<Listeners.OnEntityCreated>(OnEntityCreated);
         // Common events
         RegisterEventHandler<EventPlayerConnectFull>(Database.OnPlayerConnectFull);
         RegisterEventHandler<EventPlayerDisconnect>(OnPlayerDisconnect);
+
+        RegisterCommands();
 
         // Map start config reload
         RegisterListener<Listeners.OnMapStart>(mapName =>
@@ -123,18 +132,20 @@ public class zVIPCore : BasePlugin
                 _cachedWeaponsVersion = newWeaponModels.Version;
             }
             
-            if (Config.Modules.MvpsEnabled)
-            {
-                var newMvpModels = MvpModelsConfig.Load(ModuleDirectory);
-                MvpManager?.UpdateModelsConfig(newMvpModels);
-                _cachedMvpsVersion = newMvpModels.Version;
-            }
-                
+
             if (Config.Modules.SoundsEnabled)
                 SoundManager?.UpdateModelsConfig();
-        });
 
-        RegisterCommands();
+            if (Config.Modules.MvpEnabled)
+            {
+                _ = SafeAsync(async () =>
+                {
+                    MvpSettings = await MvpSettingsLoader.LoadOrFetchAsync();
+                    _cachedMvpVersion = MvpSettings.Version;
+                    Console.WriteLine($"[zVIPCore] MVP settings reloaded on map start (version: {MvpSettings.Version})");
+                });
+            }
+        });
 
         if (hotReload)
         {
@@ -156,9 +167,9 @@ public class zVIPCore : BasePlugin
         if (Config.Modules.WeaponsEnabled)
             AddCommand("css_zweapons", "Reload player weapons from DB (Console only)", Command_ZWeapons);
 
-        // Console-only: reload MVP DB data for a player
-        if (Config.Modules.MvpsEnabled)
-            AddCommand("css_zmvps", "Reload player mvps from DB (Console only)", Command_ZMvps);
+        // Console-only: reload MVP DB data / fetch CDN
+        if (Config.Modules.MvpEnabled)
+            AddCommand("css_zmvp", "Reload MVP data from DB / Fetch CDN (Console only)", Command_ZMvp);
 
         // Client+Server: reload JSON configs + CDN fetch
         AddCommand("css_reloadmodel", "Reload model/weapon/mvp JSON configs from CDN", Command_ReloadModel);
@@ -168,7 +179,7 @@ public class zVIPCore : BasePlugin
             AddCommand("css_zrestrict", "Toggle custom weapon sounds", SoundManager.OnToggleCustomSound);
 
         // Website commands
-        foreach (var cmd in new[] { "svip", "vip", "md", "mds", "mvp", "zmvp", "zmvps" })
+        foreach (var cmd in new[] { "svip", "vip", "md", "mds" })
         {
             AddCommand($"css_{cmd}", "Open models website", Command_ModelsWebsite);
         }
@@ -243,36 +254,76 @@ public class zVIPCore : BasePlugin
         });
     }
 
-    private void Command_ZMvps(CCSPlayerController? player, CommandInfo info)
+
+    #endregion
+
+    #region Console Command: css_zmvp
+
+    private void Command_ZMvp(CCSPlayerController? player, CommandInfo info)
     {
         if (player != null) { PrintConsoleOnly(player); return; }
 
-        if (info.ArgCount < 3 || info.GetArg(1).ToLowerInvariant() != "reload")
+        if (info.ArgCount < 2)
         {
-            Server.PrintToConsole("[zVIPCore] Usage: css_zmvps reload <steamid>");
+            Server.PrintToConsole("[zVIPCore] Usage: css_zmvp reload <steamid> | css_zmvp fetch");
             return;
         }
 
-        if (!ulong.TryParse(info.GetArg(2), out var steamId))
-        {
-            Server.PrintToConsole($"[zVIPCore] Invalid SteamID: {info.GetArg(2)}");
-            return;
-        }
+        var action = info.GetArg(1).ToLowerInvariant();
 
-        Database.ClearPlayerCache(steamId);
-        _ = SafeAsync(async () =>
+        if (action == "fetch")
         {
-            await Database.PreloadAllPlayerDataAsync(steamId);
-            Server.NextFrame(() =>
+            _ = SafeAsync(async () =>
             {
-                var target = FindPlayerBySteamId(steamId);
-                if (target != null)
+                try
                 {
-                    target.PrintToChat($"{Localizer["zVIPCore.prefix"]} {Localizer["zVIPCore.web_reload_success"]}");
+                    var newSettings = await MvpSettingsLoader.LoadOrFetchAsync();
+                    MvpSettings = newSettings;
+                    _cachedMvpVersion = newSettings.Version;
+                    Server.NextFrame(() =>
+                        Server.PrintToConsole($"[zVIPCore] MVP settings updated successfully! Version: {newSettings.Version}"));
                 }
-                Server.PrintToConsole($"[zVIPCore] Reloaded MVP data for {steamId}");
+                catch (Exception ex)
+                {
+                    Server.NextFrame(() =>
+                        Server.PrintToConsole($"[zVIPCore] Failed to fetch MVP settings: {ex.Message}"));
+                }
             });
-        });
+            return;
+        }
+
+        if (action == "reload")
+        {
+            if (info.ArgCount < 3)
+            {
+                Server.PrintToConsole("[zVIPCore] Usage: css_zmvp reload <steamid>");
+                return;
+            }
+
+            if (!ulong.TryParse(info.GetArg(2), out var steamId))
+            {
+                Server.PrintToConsole($"[zVIPCore] Invalid SteamID: {info.GetArg(2)}");
+                return;
+            }
+
+            Database.ClearPlayerCache(steamId);
+            _ = SafeAsync(async () =>
+            {
+                await Database.PreloadAllPlayerDataAsync(steamId);
+                Server.NextFrame(() =>
+                {
+                    var target = FindPlayerBySteamId(steamId);
+                    if (target != null)
+                    {
+                        target.PrintToChat($"{Localizer["zVIPCore.prefix"]} {Localizer["zVIPCore.web_reload_success"]}");
+                    }
+                    Server.PrintToConsole($"[zVIPCore] Reloaded MVP data for {steamId}");
+                });
+            });
+            return;
+        }
+
+        Server.PrintToConsole("[zVIPCore] Usage: css_zmvp reload <steamid> | css_zmvp fetch");
     }
 
     #endregion
@@ -286,7 +337,9 @@ public class zVIPCore : BasePlugin
         {
             bool modelsUpdated = await TryFetchCdnJson(Config.ModelsJsonFilename);
             bool weaponsUpdated = await TryFetchCdnJson(Config.WeaponsJsonFilename);
-            bool mvpsUpdated = await TryFetchCdnJson(Config.MvpsJsonFilename);
+            bool mvpUpdated = false;
+            if (Config.Modules.MvpEnabled)
+                mvpUpdated = await TryFetchCdnJson(Config.MvpJsonFilename);
 
             Server.NextFrame(() =>
             {
@@ -312,14 +365,14 @@ public class zVIPCore : BasePlugin
                         weaponCollections = newWeaponModels.Weapons.Count;
                         weaponTotal = newWeaponModels.GetTotalSkinsCount();
                     }
-                    if (Config.Modules.MvpsEnabled)
-                    {
-                        var newMvpModels = MvpModelsConfig.Load(ModuleDirectory);
-                        MvpManager?.UpdateModelsConfig(newMvpModels);
-                        _cachedMvpsVersion = newMvpModels.Version;
-                    }
                     if (Config.Modules.SoundsEnabled)
                         SoundManager?.UpdateModelsConfig();
+
+                    if (Config.Modules.MvpEnabled)
+                    {
+                        MvpSettings = MvpSettingsLoader.LoadFromLocal();
+                        _cachedMvpVersion = MvpSettings.Version;
+                    }
 
                     // Refresh all connected players for weapons
                     var refreshed = 0;
@@ -340,7 +393,7 @@ public class zVIPCore : BasePlugin
                         player.PrintToChat($"{Localizer["zVIPCore.prefix"]} Refreshed {refreshed} players");
                     }
 
-                    var fetchStatus = modelsUpdated || weaponsUpdated || mvpsUpdated ? " (CDN updated)" : " (no CDN changes)";
+                    var fetchStatus = modelsUpdated || weaponsUpdated || mvpUpdated ? " (CDN updated)" : " (no CDN changes)";
                     Server.PrintToConsole($"[zVIPCore] Reloaded configs{fetchStatus}. Refreshed {refreshed} players.");
                 }
                 catch (Exception ex)
@@ -390,7 +443,7 @@ public class zVIPCore : BasePlugin
             string localVersion = "";
             if (filename == Config.ModelsJsonFilename) localVersion = _cachedModelsVersion;
             else if (filename == Config.WeaponsJsonFilename) localVersion = _cachedWeaponsVersion;
-            else if (filename == Config.MvpsJsonFilename) localVersion = _cachedMvpsVersion;
+            else if (filename == Config.MvpJsonFilename) localVersion = _cachedMvpVersion;
 
             if (remoteVersion == localVersion)
                 return false;
@@ -405,8 +458,8 @@ public class zVIPCore : BasePlugin
                 _cachedModelsVersion = remoteVersion;
             else if (filename == Config.WeaponsJsonFilename)
                 _cachedWeaponsVersion = remoteVersion;
-            else if (filename == Config.MvpsJsonFilename)
-                _cachedMvpsVersion = remoteVersion;
+            else if (filename == Config.MvpJsonFilename)
+                _cachedMvpVersion = remoteVersion;
 
             // NOTE: Do NOT call Server.PrintToConsole here — we're on a background thread.
             // Logging happens in the Server.NextFrame callback in Command_ReloadModel.
@@ -498,9 +551,9 @@ public class zVIPCore : BasePlugin
 
     public override void Unload(bool hotReload)
     {
+        MvpManager?.Dispose();
         Database?.Dispose();
         WeaponManager.ClearSubclassCache();
-        MvpManager?.Dispose();
         _reloadTracking.Clear();
     }
 

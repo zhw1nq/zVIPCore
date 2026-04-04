@@ -9,6 +9,10 @@
   "zVIPCore.sound_enabled": "{green}Custom weapon sounds {yellow}enabled{green}.",
   "zVIPCore.sound_disabled": "{yellow}Custom weapon sounds {red}disabled{yellow}.",
   "zVIPCore.web_reload_success": "{green}Configuration reloaded successfully.",
-  "zVIPCore.mvp.chat.1": "{red}{0}{default} is the MVP of the round! Playing: {blue}{1}{default}.",
-  "zVIPCore.mvp.html.1": "<font color='red'>{0}</font> IS the MVP of the round!<br><b color='white'>━━━━━━━━━━━━━━━━━━━━━━━━<</b><br>Playing: <font color='blue'>{1}</font>"
+  "mvp.default.chat": "{red}{0}{default} is the MVP of the round! Playing: {blue}{1}{default}.",
+  "mvp.default.html": "<font color='red'>{0}</font> IS the MVP of the round!<br><b color='white'>━━━━━━━━━━━━━━━━━━━━━━━━<</b><br>Playing: <font color='blue'>{1}</font>",
+  "mvp.1.chat": "{red}{0}{default} is the MVP of the round! Playing: {blue}{1}{default}.",
+  "mvp.1.html": "<font color='red'>{0}</font> IS the MVP of the round!<br><b color='white'>━━━━━━━━━━━━━━━━━━━━━━━━<</b><br><img src='https://raw.githubusercontent.com/T3Marius/GIFS-Repository/refs/heads/main/Flawless_4k.gif'></img>",
+  "mvp.2.chat": "{red}{0}{default} is the MVP of the round! Playing: {blue}{1}{default}.",
+  "mvp.2.html": "<font color='red'>{0}</font> IS the MVP of the round!<br><b color='white'>━━━━━━━━━━━━━━━━━━━━━━━━<</b>Playing: <font color='blue'>{1}</font>"
 }

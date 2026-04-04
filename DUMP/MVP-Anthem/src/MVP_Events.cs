@@ -1,16 +1,18 @@
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Modules.Timers;
+using Microsoft.Extensions.Logging;
+using static MVPAnthem.MVPAnthem;
 using Timer = CounterStrikeSharp.API.Modules.Timers.Timer;
 
-namespace zVIPCore;
+namespace MVPAnthem;
 
-public class MvpManager
+public static class Events
 {
-    private Timer? _centerHtmlTimer;
-    private Timer? _centerHtmlTickTimer;
-    private bool _isCenterHtmlActive;
-    private string _htmlMessage = "";
+    private static Timer? _centerHtmlTimer;
+    private static Timer? _centerHtmlTickTimer;
+    private static bool _isCenterHtmlActive;
+    private static string _htmlMessage = "";
 
     /// <summary>
     /// Emit MVP sound on every human player (self-to-self).
@@ -26,15 +28,32 @@ public class MvpManager
     /// <summary>
     /// Preview: emit sound on a single player (self-to-self), one time only.
     /// </summary>
-    public static void PlayPreviewToPlayer(CCSPlayerController player, MvpItemSettings mvpSettings)
+    public static void PlayPreviewToPlayer(CCSPlayerController player, MVP_Settings mvpSettings)
     {
         if (!player.IsValid) return;
         player.EmitSound(mvpSettings.MVPSound, player, 1.0f);
     }
 
+    public static void RegisterEvents()
+    {
+        Instance.RegisterEventHandler<EventPlayerConnectFull>(OnPlayerConnect);
+        Instance.RegisterEventHandler<EventRoundMvp>(OnRoundMvp, HookMode.Pre);
+        Instance.RegisterEventHandler<EventPlayerDisconnect>(OnPlayerDisconnect);
+        Instance.RegisterEventHandler<EventCsWinPanelMatch>(OnMapEnd);
+        Instance.RegisterEventHandler<EventRoundStart>(OnRoundStart);
+    }
+
+    public static void Dispose()
+    {
+        _centerHtmlTimer?.Kill();
+        _centerHtmlTimer = null;
+        _centerHtmlTickTimer?.Kill();
+        _centerHtmlTickTimer = null;
+    }
+
     private static string? GetLocalizedMessage(string mvpKey, string messageType)
     {
-        var localizer = zVIPCore.Instance.Localizer;
+        var localizer = Instance.Localizer;
 
         var specificKey = $"{mvpKey}.{messageType}";
         var msg = localizer[specificKey];
@@ -49,7 +68,7 @@ public class MvpManager
         return null;
     }
 
-    public HookResult OnRoundStart(EventRoundStart @event, GameEventInfo info)
+    private static HookResult OnRoundStart(EventRoundStart @event, GameEventInfo info)
     {
         _isCenterHtmlActive = false;
         _centerHtmlTimer?.Kill();
@@ -60,23 +79,23 @@ public class MvpManager
         return HookResult.Continue;
     }
 
-    public HookResult OnPlayerConnect(EventPlayerConnectFull @event, GameEventInfo info)
+    private static HookResult OnPlayerConnect(EventPlayerConnectFull @event, GameEventInfo info)
     {
         var player = @event.Userid;
         if (player == null || !player.IsValid || player.IsBot) return HookResult.Continue;
 
         int slot = player.Slot;
-        zVIPCore.Instance.AddTimer(3.0f, () =>
+        Instance.AddTimer(3.0f, () =>
         {
             var p = Utilities.GetPlayerFromSlot(slot);
             if (p == null || !p.IsValid || p.Connected != PlayerConnectedState.PlayerConnected) return;
-            _ = Task.Run(async () => await Database.GetPlayerMvpAsync(p.SteamID));
+            _ = Task.Run(async () => await Instance.PlayerCache.GetPlayerDataAsync(p));
         });
 
         return HookResult.Continue;
     }
 
-    public HookResult OnPlayerDisconnect(EventPlayerDisconnect @event, GameEventInfo info)
+    private static HookResult OnPlayerDisconnect(EventPlayerDisconnect @event, GameEventInfo info)
     {
         var player = @event.Userid;
         if (player == null || !player.IsValid) return HookResult.Continue;
@@ -84,31 +103,31 @@ public class MvpManager
         ulong steamId = player.SteamID;
         _ = Task.Run(async () =>
         {
-            await Database.FlushMvpAsync(steamId);
-            Server.NextFrame(() => Database.ClearMvpPlayer(steamId));
+            await Instance.PlayerCache.FlushPlayerAsync(steamId);
+            Server.NextFrame(() => Instance.PlayerCache.RemovePlayer(steamId));
         });
 
         return HookResult.Continue;
     }
 
-    public HookResult OnRoundMvp(EventRoundMvp @event, GameEventInfo info)
+    private static HookResult OnRoundMvp(EventRoundMvp @event, GameEventInfo info)
     {
         var mvpPlayer = @event.Userid;
         if (mvpPlayer == null || !mvpPlayer.IsValid) return HookResult.Continue;
 
-        if (Config.Mvp.DisableDefaultMvp)
+        if (Instance.Config.Settings.DisablePlayerDefaultMVP)
             mvpPlayer.MVPs = 0;
 
-        var (mvpName, mvpSound) = Database.GetMvpFromCache(mvpPlayer.SteamID);
+        var (mvpName, mvpSound) = Instance.PlayerCache.GetMVP(mvpPlayer);
         if (string.IsNullOrEmpty(mvpSound) || string.IsNullOrEmpty(mvpName))
             return HookResult.Continue;
 
         info.DontBroadcast = true;
 
-        MvpItemSettings? mvpSettings = null;
+        MVP_Settings? mvpSettings = null;
         string? mvpKey = null;
 
-        foreach (var cat in zVIPCore.MvpSettings.MVPSettings)
+        foreach (var cat in Instance.MVPSettings.MVPSettings)
         {
             foreach (var entry in cat.Value.MVPs)
             {
@@ -125,8 +144,8 @@ public class MvpManager
         if (mvpSettings == null || string.IsNullOrEmpty(mvpKey))
             return HookResult.Continue;
 
-        var localizer = zVIPCore.Instance.Localizer;
-        var timer = Config.Mvp;
+        var localizer = Instance.Localizer;
+        var timer = Instance.Config.Timer;
 
         // Emit sound ONCE on every player (self-to-self)
         // Non-positional via vsndevts: use_hrtf=0, distance_max=100000
@@ -147,7 +166,7 @@ public class MvpManager
             {
                 var msg = GetLocalizedMessage(mvpKey, "chat");
                 if (msg != null)
-                    p.PrintToChat(localizer["zVIPCore.prefix"] + string.Format(msg, mvpPlayer.PlayerName, mvpSettings.MVPName));
+                    p.PrintToChat(localizer["prefix"] + string.Format(msg, mvpPlayer.PlayerName, mvpSettings.MVPName));
             }
         }
 
@@ -157,7 +176,7 @@ public class MvpManager
             _htmlMessage = htmlMsg;
             _isCenterHtmlActive = true;
             _centerHtmlTimer?.Kill();
-            _centerHtmlTimer = zVIPCore.Instance.AddTimer(timer.CenterHtmlDuration, () =>
+            _centerHtmlTimer = Instance.AddTimer(timer.CenterHtmlDuration, () =>
             {
                 _isCenterHtmlActive = false;
                 _centerHtmlTimer = null;
@@ -166,7 +185,7 @@ public class MvpManager
             });
 
             _centerHtmlTickTimer?.Kill();
-            _centerHtmlTickTimer = zVIPCore.Instance.AddTimer(0.1f, () =>
+            _centerHtmlTickTimer = Instance.AddTimer(0.1f, () =>
             {
                 if (!_isCenterHtmlActive)
                 {
@@ -183,31 +202,19 @@ public class MvpManager
         return HookResult.Continue;
     }
 
-    public HookResult OnMapEnd(EventCsWinPanelMatch @event, GameEventInfo info)
+    private static HookResult OnMapEnd(EventCsWinPanelMatch @event, GameEventInfo info)
     {
         Task.Run(async () =>
         {
-            int dirty = Database.GetMvpDirtyCount();
+            int dirty = Instance.PlayerCache.GetDirtyCount();
             if (dirty > 0)
             {
-                Console.WriteLine($"[zVIPCore] Flushing {dirty} MVP preferences to database...");
-                await Database.FlushAllMvpAsync();
+                Instance.Logger.LogInformation($"[MVP-Anthem] Flushing {dirty} preferences to database...");
+                await Instance.PlayerCache.FlushAllAsync();
             }
-            Server.NextFrame(() => Database.ClearMvpAll());
+            Server.NextFrame(() => Instance.PlayerCache.ClearAll());
         });
 
         return HookResult.Continue;
     }
-
-    public void Dispose()
-    {
-        _centerHtmlTimer?.Kill();
-        _centerHtmlTimer = null;
-        _centerHtmlTickTimer?.Kill();
-        _centerHtmlTickTimer = null;
-    }
-
-    // Shorthand references
-    private static Config Config => zVIPCore.Config;
-    private static Database Database => zVIPCore.Database;
 }

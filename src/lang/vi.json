@@ -8,5 +8,11 @@
   "zVIPCore.kick_reason_spam": "Spam lệnh",
   "zVIPCore.sound_enabled": "{green}Âm thanh vũ khí custom {yellow}đã bật{green}.",
   "zVIPCore.sound_disabled": "{yellow}Âm thanh vũ khí custom {red}đã tắt{yellow}.",
-  "zVIPCore.web_reload_success": "{green}Đã tải lại cấu hình thành công."
+  "zVIPCore.web_reload_success": "{green}Đã tải lại cấu hình thành công.",
+  "mvp.default.chat": "{red}{0}{silver} CHƯA TÀY ĐÂU !! Đang phát: {blue}{1}{silver}.",
+  "mvp.default.html": "<font color='red'>{0}</font> CHƯA TÀY ĐÂU !!<br><img src='https://cdn.vhming.com/mvp.jpg'></img>",
+  "mvp.1.chat": "{red}{0}{silver} CHƯA TÀY ĐÂU !! Đang phát: {blue}{1}{silver}.",
+  "mvp.1.html": "<font color='red'>{0}</font> CHƯA TÀY ĐÂU !!<br><img src='https://cdn.vhming.com/mvp.jpg'></img>",
+  "mvp.2.chat": "{red}{0}{silver} CHƯA TÀY ĐÂU !! Đang phát: {blue}{1}{silver}.",
+  "mvp.2.html": "<font color='red'>{0}</font> CHƯA TÀY ĐÂU !!<br><img src='https://cdn.vhming.com/mvp.jpg'></img>"
 }
