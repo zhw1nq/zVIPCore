@@ -13,8 +13,8 @@ public class Database : IDisposable
     private readonly ConcurrentDictionary<(ulong, string), string> _weaponCache = new();
     private readonly ConcurrentDictionary<ulong, string> _smokeCache = new();
     private readonly ConcurrentDictionary<ulong, bool> _soundEnabledCache = new();
-    private readonly ConcurrentDictionary<ulong, MvpPlayerData> _mvpCache = new();
-    private readonly ConcurrentDictionary<ulong, bool> _mvpDirty = new();
+    private readonly ConcurrentDictionary<(ulong, string), MvpPlayerData> _mvpCache = new();
+    private readonly ConcurrentDictionary<(ulong, string), bool> _mvpDirty = new();
     private bool _disposed;
 
     public Database(DatabaseConfig config)
@@ -65,11 +65,13 @@ public class Database : IDisposable
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
             CREATE TABLE IF NOT EXISTS zMVP (
-                steam_id BIGINT UNSIGNED PRIMARY KEY,
+                steam_id BIGINT UNSIGNED NOT NULL,
+                team VARCHAR(2) NOT NULL DEFAULT 'CT',
                 mvp_name VARCHAR(255) NULL,
                 mvp_sound VARCHAR(255) NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY (steam_id, team),
                 INDEX idx_steam_id (steam_id)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
             ", conn);
@@ -350,9 +352,10 @@ public class Database : IDisposable
 
     #region MVP
 
-    public async Task<MvpPlayerData?> GetPlayerMvpAsync(ulong steamId)
+    public async Task<MvpPlayerData?> GetPlayerMvpAsync(ulong steamId, string team)
     {
-        if (_mvpCache.TryGetValue(steamId, out var cached))
+        var key = (steamId, team);
+        if (_mvpCache.TryGetValue(key, out var cached))
             return cached;
 
         try
@@ -361,8 +364,9 @@ public class Database : IDisposable
             await conn.OpenAsync();
 
             await using var cmd = new MySqlCommand(
-                "SELECT steam_id, mvp_name, mvp_sound FROM zMVP WHERE steam_id = @steamId", conn);
+                "SELECT mvp_name, mvp_sound FROM zMVP WHERE steam_id = @steamId AND team = @team", conn);
             cmd.Parameters.AddWithValue("@steamId", steamId);
+            cmd.Parameters.AddWithValue("@team", team);
 
             await using var reader = await cmd.ExecuteReaderAsync();
             if (await reader.ReadAsync())
@@ -372,7 +376,7 @@ public class Database : IDisposable
                     MvpName = reader.IsDBNull(reader.GetOrdinal("mvp_name")) ? null : reader.GetString("mvp_name"),
                     MvpSound = reader.IsDBNull(reader.GetOrdinal("mvp_sound")) ? null : reader.GetString("mvp_sound")
                 };
-                _mvpCache[steamId] = data;
+                _mvpCache[key] = data;
                 return data;
             }
 
@@ -380,12 +384,12 @@ public class Database : IDisposable
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[zVIPCore] Failed to get MVP preference for {steamId}: {ex.Message}");
+            Console.WriteLine($"[zVIPCore] Failed to get MVP preference for {steamId}/{team}: {ex.Message}");
             return null;
         }
     }
 
-    public async Task SavePlayerMvpAsync(ulong steamId, string? mvpName, string? mvpSound)
+    public async Task SavePlayerMvpAsync(ulong steamId, string team, string? mvpName, string? mvpSound)
     {
         try
         {
@@ -393,14 +397,15 @@ public class Database : IDisposable
             await conn.OpenAsync();
 
             await using var cmd = new MySqlCommand(@"
-                INSERT INTO zMVP (steam_id, mvp_name, mvp_sound)
-                VALUES (@steamId, @mvpName, @mvpSound)
+                INSERT INTO zMVP (steam_id, team, mvp_name, mvp_sound)
+                VALUES (@steamId, @team, @mvpName, @mvpSound)
                 ON DUPLICATE KEY UPDATE
                     mvp_name = @mvpName,
                     mvp_sound = @mvpSound,
                     updated_at = CURRENT_TIMESTAMP
             ", conn);
             cmd.Parameters.AddWithValue("@steamId", steamId);
+            cmd.Parameters.AddWithValue("@team", team);
             cmd.Parameters.AddWithValue("@mvpName", mvpName ?? (object)DBNull.Value);
             cmd.Parameters.AddWithValue("@mvpSound", mvpSound ?? (object)DBNull.Value);
 
@@ -408,53 +413,62 @@ public class Database : IDisposable
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[zVIPCore] Failed to save MVP preference for {steamId}: {ex.Message}");
+            Console.WriteLine($"[zVIPCore] Failed to save MVP preference for {steamId}/{team}: {ex.Message}");
         }
     }
 
-    public (string? mvpName, string? mvpSound) GetMvpFromCache(ulong steamId)
+    public (string? mvpName, string? mvpSound) GetMvpFromCache(ulong steamId, string team)
     {
-        return _mvpCache.TryGetValue(steamId, out var data)
+        return _mvpCache.TryGetValue((steamId, team), out var data)
             ? (data.MvpName, data.MvpSound)
             : (null, null);
     }
 
-    public void SetMvpCache(ulong steamId, string mvpName, string mvpSound)
+    public void SetMvpCache(ulong steamId, string team, string mvpName, string mvpSound)
     {
-        var data = _mvpCache.GetOrAdd(steamId, _ => new MvpPlayerData());
+        var key = (steamId, team);
+        var data = _mvpCache.GetOrAdd(key, _ => new MvpPlayerData());
         data.MvpName = mvpName;
         data.MvpSound = mvpSound;
-        _mvpDirty[steamId] = true;
+        _mvpDirty[key] = true;
     }
 
-    public void RemoveMvpCache(ulong steamId)
+    public void RemoveMvpCache(ulong steamId, string team)
     {
-        if (_mvpCache.TryGetValue(steamId, out var data))
+        var key = (steamId, team);
+        if (_mvpCache.TryGetValue(key, out var data))
         {
             data.MvpName = null;
             data.MvpSound = null;
-            _mvpDirty[steamId] = true;
+            _mvpDirty[key] = true;
         }
     }
 
     public void ClearMvpPlayer(ulong steamId)
     {
-        _mvpCache.TryRemove(steamId, out _);
-        _mvpDirty.TryRemove(steamId, out _);
+        foreach (var team in new[] { "CT", "T" })
+        {
+            _mvpCache.TryRemove((steamId, team), out _);
+            _mvpDirty.TryRemove((steamId, team), out _);
+        }
     }
 
     public async Task FlushMvpAsync(ulong steamId)
     {
         if (steamId == 0) return;
-        if (_mvpDirty.TryRemove(steamId, out _) && _mvpCache.TryGetValue(steamId, out var data))
-            await SavePlayerMvpAsync(steamId, data.MvpName, data.MvpSound);
+        foreach (var team in new[] { "CT", "T" })
+        {
+            var key = (steamId, team);
+            if (_mvpDirty.TryRemove(key, out _) && _mvpCache.TryGetValue(key, out var data))
+                await SavePlayerMvpAsync(steamId, team, data.MvpName, data.MvpSound);
+        }
     }
 
     public async Task FlushAllMvpAsync()
     {
         var tasks = _mvpDirty.Keys
-            .Where(id => _mvpDirty.TryRemove(id, out _) && _mvpCache.TryGetValue(id, out _))
-            .Select(id => SavePlayerMvpAsync(id, _mvpCache[id].MvpName, _mvpCache[id].MvpSound))
+            .Where(key => _mvpDirty.TryRemove(key, out _) && _mvpCache.TryGetValue(key, out _))
+            .Select(key => SavePlayerMvpAsync(key.Item1, key.Item2, _mvpCache[key].MvpName, _mvpCache[key].MvpSound))
             .ToList();
 
         await Task.WhenAll(tasks);
@@ -527,15 +541,16 @@ public class Database : IDisposable
                 ? Convert.ToBoolean(result) : true;
         }
 
-        // 5. MVP preferences
+        // 5. MVP preferences (CT + T)
         await using (var cmd = new MySqlCommand(
-            "SELECT mvp_name, mvp_sound FROM zMVP WHERE steam_id = @steamid LIMIT 1", conn))
+            "SELECT team, mvp_name, mvp_sound FROM zMVP WHERE steam_id = @steamid", conn))
         {
             cmd.Parameters.AddWithValue("@steamid", steamId);
             await using var reader = await cmd.ExecuteReaderAsync();
-            if (await reader.ReadAsync())
+            while (await reader.ReadAsync())
             {
-                _mvpCache[steamId] = new MvpPlayerData
+                var team = reader.GetString("team");
+                _mvpCache[(steamId, team)] = new MvpPlayerData
                 {
                     MvpName = reader.IsDBNull(reader.GetOrdinal("mvp_name")) ? null : reader.GetString("mvp_name"),
                     MvpSound = reader.IsDBNull(reader.GetOrdinal("mvp_sound")) ? null : reader.GetString("mvp_sound")
@@ -556,8 +571,11 @@ public class Database : IDisposable
 
         _smokeCache.TryRemove(steamId, out _);
         _soundEnabledCache.TryRemove(steamId, out _);
-        _mvpCache.TryRemove(steamId, out _);
-        _mvpDirty.TryRemove(steamId, out _);
+        foreach (var t in new[] { "CT", "T" })
+        {
+            _mvpCache.TryRemove((steamId, t), out _);
+            _mvpDirty.TryRemove((steamId, t), out _);
+        }
     }
 
     public HookResult OnPlayerConnectFull(EventPlayerConnectFull @event, GameEventInfo info)

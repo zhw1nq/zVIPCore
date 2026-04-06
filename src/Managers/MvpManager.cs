@@ -70,7 +70,11 @@ public class MvpManager
         {
             var p = Utilities.GetPlayerFromSlot(slot);
             if (p == null || !p.IsValid || p.Connected != PlayerConnectedState.PlayerConnected) return;
-            _ = Task.Run(async () => await Database.GetPlayerMvpAsync(p.SteamID));
+            _ = Task.Run(async () =>
+            {
+                await Database.GetPlayerMvpAsync(p.SteamID, "CT");
+                await Database.GetPlayerMvpAsync(p.SteamID, "T");
+            });
         });
 
         return HookResult.Continue;
@@ -91,6 +95,12 @@ public class MvpManager
         return HookResult.Continue;
     }
 
+    /// <summary>
+    /// Map team number to DB team string.
+    /// TeamNum: 2 = Terrorist, 3 = Counter-Terrorist
+    /// </summary>
+    private static string GetTeamString(int teamNum) => teamNum == 3 ? "CT" : "T";
+
     public HookResult OnRoundMvp(EventRoundMvp @event, GameEventInfo info)
     {
         var mvpPlayer = @event.Userid;
@@ -99,7 +109,19 @@ public class MvpManager
         if (Config.Mvp.DisableDefaultMvp)
             mvpPlayer.MVPs = 0;
 
-        var (mvpName, mvpSound) = Database.GetMvpFromCache(mvpPlayer.SteamID);
+        // Determine team of the MVP player
+        var teamNum = mvpPlayer.TeamNum;
+        var team = GetTeamString(teamNum);
+
+        var (mvpName, mvpSound) = Database.GetMvpFromCache(mvpPlayer.SteamID, team);
+
+        // Fallback: if no MVP for current team, try the other team
+        if (string.IsNullOrEmpty(mvpSound) || string.IsNullOrEmpty(mvpName))
+        {
+            var otherTeam = team == "CT" ? "T" : "CT";
+            var (fallbackName, fallbackSound) = Database.GetMvpFromCache(mvpPlayer.SteamID, otherTeam);
+        }
+
         if (string.IsNullOrEmpty(mvpSound) || string.IsNullOrEmpty(mvpName))
             return HookResult.Continue;
 
@@ -182,6 +204,7 @@ public class MvpManager
 
         return HookResult.Continue;
     }
+
 
     public HookResult OnMapEnd(EventCsWinPanelMatch @event, GameEventInfo info)
     {
