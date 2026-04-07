@@ -17,7 +17,6 @@ public class SoundManager
     private readonly Dictionary<ulong, bool> _customSoundEnabledBySteamId = new();
     private readonly object _customSoundLock = new();
     private readonly Dictionary<int, OfficialSoundOverride> _overrideByItemDefIndex = new();
-    private readonly Dictionary<nint, string> _subclassByWeaponHandle = new();
 
     private const int MaxPlayerSlots = 65;
     private const int EntityIndexMask = 0x3FFF;
@@ -189,7 +188,6 @@ public class SoundManager
 
     public void OnMapStart(string mapName)
     {
-        _subclassByWeaponHandle.Clear();
         _pawnCache.Clear();
         _fireSoundCache.ClearAll();
         RebuildOfficialOverrides();
@@ -232,16 +230,10 @@ public class SoundManager
         itemDefIndex = (int)weapon.AttributeManager.Item.ItemDefinitionIndex;
 
         var weaponType = WeaponManager.GetDesignerName(weapon);
+        var team = WeaponManager.GetTeamString(player.Team);
 
-        // Use cached config from WeaponManager instead of loading from disk
-        WeaponModelData? modelData = null;
-        var trackedModelId = zVIPCore.WeaponManager.GetWeaponTrackedModelId(weapon);
-        if (!string.IsNullOrEmpty(trackedModelId))
-        {
-            modelData = zVIPCore.WeaponManager.GetModelsConfig().FindModelByUniqueId(trackedModelId);
-        }
-
-        modelData ??= zVIPCore.WeaponManager.GetEquippedWeaponModel(player.SteamID, weaponType);
+        // Lookup equipped weapon model by player's team
+        var modelData = zVIPCore.WeaponManager.GetEquippedWeaponModel(player.SteamID, team, weaponType);
 
         if (modelData != null && !string.IsNullOrWhiteSpace(modelData.SoundEvent))
         {
@@ -274,18 +266,6 @@ public class SoundManager
         }
 
         return !string.IsNullOrWhiteSpace(customEvent) || !string.IsNullOrWhiteSpace(officialEvent);
-    }
-
-    public void TrackWeaponSubclass(CBasePlayerWeapon weapon, string subclass)
-    {
-        if (weapon == null || !weapon.IsValid || string.IsNullOrWhiteSpace(subclass)) return;
-        _subclassByWeaponHandle[weapon.Handle] = subclass.Trim();
-    }
-
-    public void UntrackWeaponSubclass(CBasePlayerWeapon weapon)
-    {
-        if (weapon == null) return;
-        _subclassByWeaponHandle.Remove(weapon.Handle);
     }
 
     #endregion

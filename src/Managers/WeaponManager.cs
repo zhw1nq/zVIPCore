@@ -1,5 +1,6 @@
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
+using CounterStrikeSharp.API.Modules.Utils;
 using System.Collections.Concurrent;
 
 namespace zVIPCore;
@@ -7,9 +8,9 @@ namespace zVIPCore;
 public class WeaponManager
 {
     private WeaponModelsConfig _modelsConfig = new();
-    private readonly ConcurrentDictionary<ulong, ConcurrentDictionary<string, string>> _playerWeapons = new();
+    // Key: (steamId, team) → weaponType → modelId
+    private readonly ConcurrentDictionary<(ulong, string), ConcurrentDictionary<string, string>> _playerWeapons = new();
     private static readonly ConcurrentDictionary<nint, string> OldSubclassByHandle = new();
-    private static readonly ConcurrentDictionary<nint, string> WeaponModelIdByHandle = new();
 
     public void UpdateModelsConfig(WeaponModelsConfig config) => _modelsConfig = config;
 
@@ -48,9 +49,6 @@ public class WeaponManager
             if (player == null || !player.IsValid || player.IsBot)
                 return;
 
-            if (TryReapplyWeaponTrackedModel(weapon))
-                return;
-
             ApplyPlayerWeaponSubclass(player, weapon);
         });
     }
@@ -65,9 +63,6 @@ public class WeaponManager
         if (activeWeapon?.IsValid != true)
             return HookResult.Continue;
 
-        if (TryReapplyWeaponTrackedModel(activeWeapon))
-            return HookResult.Continue;
-
         ApplyPlayerWeaponSubclass(player, activeWeapon);
         return HookResult.Continue;
     }
@@ -75,9 +70,10 @@ public class WeaponManager
     private void ApplyPlayerWeaponSubclass(CCSPlayerController player, CBasePlayerWeapon weapon)
     {
         var steamId = player.SteamID;
+        var team = GetTeamString(player.Team);
         var weaponDesignerName = GetDesignerName(weapon);
 
-        if (_playerWeapons.TryGetValue(steamId, out var weapons) &&
+        if (_playerWeapons.TryGetValue((steamId, team), out var weapons) &&
             weapons.TryGetValue(weaponDesignerName, out var modelId))
         {
             var modelData = _modelsConfig.FindModelByUniqueId(modelId);
@@ -87,28 +83,27 @@ public class WeaponManager
                 if (!string.IsNullOrEmpty(subclass) && weaponDesignerName.Equals(modelData.WeaponType, StringComparison.Ordinal))
                 {
                     SetSubclass(weapon, weaponDesignerName, subclass, modelData.Name);
-                    WeaponModelIdByHandle[weapon.Handle] = modelId;
                 }
             }
         }
         else
         {
-            _ = zVIPCore.SafeAsync(() => LoadAndApplyWeaponSubclassAsync(steamId, player, weapon, weaponDesignerName));
+            _ = zVIPCore.SafeAsync(() => LoadAndApplyWeaponSubclassAsync(steamId, team, player, weapon, weaponDesignerName));
         }
     }
 
-    private async Task LoadAndApplyWeaponSubclassAsync(ulong steamId, CCSPlayerController player, CBasePlayerWeapon weapon, string weaponName)
+    private async Task LoadAndApplyWeaponSubclassAsync(ulong steamId, string team, CCSPlayerController player, CBasePlayerWeapon weapon, string weaponName)
     {
-        var modelId = await zVIPCore.Database.GetPlayerWeaponAsync(steamId, weaponName);
+        var modelId = await zVIPCore.Database.GetPlayerWeaponAsync(steamId, weaponName, team);
         if (modelId == null) return;
 
-        var weapons = _playerWeapons.GetOrAdd(steamId, _ => new ConcurrentDictionary<string, string>());
+        var weapons = _playerWeapons.GetOrAdd((steamId, team), _ => new ConcurrentDictionary<string, string>());
         weapons[weaponName] = modelId;
 
         var modelData = _modelsConfig.FindModelByUniqueId(modelId);
         if (modelData == null)
         {
-            await zVIPCore.Database.RemovePlayerWeaponAsync(steamId, weaponName);
+            await zVIPCore.Database.RemovePlayerWeaponAsync(steamId, weaponName, team);
             return;
         }
 
@@ -121,7 +116,6 @@ public class WeaponManager
             if (player.IsValid && weapon?.IsValid == true)
             {
                 SetSubclass(weapon, weaponName, subclass, modelData.Name);
-                WeaponModelIdByHandle[weapon.Handle] = modelId;
             }
         });
     }
@@ -136,18 +130,22 @@ public class WeaponManager
             ApplyPlayerWeaponSubclass(player, activeWeapon);
     }
 
-    public void ClearPlayerData(ulong steamId) => _playerWeapons.TryRemove(steamId, out _);
-
-    public WeaponModelData? GetEquippedWeaponModel(ulong steamId, string weaponType)
+    public void ClearPlayerData(ulong steamId)
     {
-        if (!_playerWeapons.TryGetValue(steamId, out var weapons)) return null;
+        _playerWeapons.TryRemove((steamId, "CT"), out _);
+        _playerWeapons.TryRemove((steamId, "T"), out _);
+    }
+
+    public WeaponModelData? GetEquippedWeaponModel(ulong steamId, string team, string weaponType)
+    {
+        if (!_playerWeapons.TryGetValue((steamId, team), out var weapons)) return null;
         if (!weapons.TryGetValue(weaponType, out var modelId)) return null;
         return _modelsConfig.FindModelByUniqueId(modelId);
     }
 
-    public void UpdatePlayerWeaponCache(ulong steamId, string weaponName, string? modelId)
+    public void UpdatePlayerWeaponCache(ulong steamId, string team, string weaponName, string? modelId)
     {
-        var weapons = _playerWeapons.GetOrAdd(steamId, _ => new ConcurrentDictionary<string, string>());
+        var weapons = _playerWeapons.GetOrAdd((steamId, team), _ => new ConcurrentDictionary<string, string>());
         if (modelId == null)
             weapons.TryRemove(weaponName, out _);
         else
@@ -172,12 +170,14 @@ public class WeaponManager
         };
     }
 
+    public static string GetTeamString(CsTeam team) =>
+        team == CsTeam.CounterTerrorist ? "CT" : "T";
+
     public static void SetSubclass(CBasePlayerWeapon weapon, string oldSubclass, string newSubclass, string? customName = null)
     {
         if (string.IsNullOrEmpty(newSubclass)) return;
 
         OldSubclassByHandle[weapon.Handle] = oldSubclass;
-        zVIPCore.SoundManager?.TrackWeaponSubclass(weapon, newSubclass);
         weapon.AcceptInput("ChangeSubclass", weapon, weapon, newSubclass);
 
         if (!string.IsNullOrEmpty(customName))
@@ -191,42 +191,11 @@ public class WeaponManager
 
         weapon.AcceptInput("ChangeSubclass", weapon, weapon, oldSubclass);
         OldSubclassByHandle.TryRemove(weapon.Handle, out _);
-        zVIPCore.SoundManager?.UntrackWeaponSubclass(weapon);
     }
 
     public static void ClearSubclassCache()
     {
         OldSubclassByHandle.Clear();
-        WeaponModelIdByHandle.Clear();
-    }
-
-    public string? GetWeaponTrackedModelId(CBasePlayerWeapon weapon)
-    {
-        if (weapon == null || !weapon.IsValid) return null;
-        return WeaponModelIdByHandle.TryGetValue(weapon.Handle, out var modelId) ? modelId : null;
-    }
-
-    private bool TryReapplyWeaponTrackedModel(CBasePlayerWeapon weapon)
-    {
-        if (!WeaponModelIdByHandle.TryGetValue(weapon.Handle, out var trackedModelId))
-            return false;
-
-        var modelData = _modelsConfig.FindModelByUniqueId(trackedModelId);
-        if (modelData == null)
-        {
-            WeaponModelIdByHandle.TryRemove(weapon.Handle, out _);
-            return false;
-        }
-
-        var subclass = modelData.GetSubclassName();
-        var weaponDesignerName = GetDesignerName(weapon);
-        if (!string.IsNullOrEmpty(subclass) && weaponDesignerName.Equals(modelData.WeaponType, StringComparison.Ordinal))
-        {
-            SetSubclass(weapon, weaponDesignerName, subclass, modelData.Name);
-            return true;
-        }
-
-        return false;
     }
 
     private static CCSPlayerController? FindPlayerFromWeapon(CBasePlayerWeapon weapon)
