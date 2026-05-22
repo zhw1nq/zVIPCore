@@ -312,6 +312,11 @@ public class Database : IDisposable
         return null;
     }
 
+    public string? GetSmokeColorCached(ulong steamId)
+    {
+        return _smokeCache.TryGetValue(steamId, out var cached) ? cached : null;
+    }
+
     public async Task SavePlayerSmokeColorAsync(ulong steamId, string color)
     {
         _smokeCache[steamId] = color;

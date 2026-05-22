@@ -7,7 +7,6 @@ namespace zVIPCore;
 
 public class SmokeManager
 {
-    private readonly ConcurrentDictionary<ulong, string> _playerSmokeColors = new();
     private readonly Random _random = new();
 
     public void OnEntityCreated(CEntityInstance entity)
@@ -29,7 +28,8 @@ public class SmokeManager
                 return;
 
             var steamId = player.SteamID;
-            if (!_playerSmokeColors.TryGetValue(steamId, out var color))
+            var color = zVIPCore.Database.GetSmokeColorCached(steamId);
+            if (string.IsNullOrEmpty(color))
                 return;
 
             ApplySmokeColor(grenade, color);
@@ -65,28 +65,16 @@ public class SmokeManager
 
     public void SetPlayerSmokeColor(ulong steamId, string color)
     {
-        _playerSmokeColors[steamId] = color;
+        _ = zVIPCore.Database.SavePlayerSmokeColorAsync(steamId, color);
     }
 
     public void ClearPlayerData(ulong steamId)
     {
-        _playerSmokeColors.TryRemove(steamId, out _);
+        // Handled by Database.ClearPlayerCache
     }
 
     public string? GetPlayerSmokeColor(ulong steamId)
     {
-        return _playerSmokeColors.TryGetValue(steamId, out var color) ? color : null;
-    }
-
-    /// <summary>
-    /// Load player's smoke color from database into memory cache
-    /// </summary>
-    public async Task LoadPlayerSmokeColorAsync(ulong steamId)
-    {
-        var color = await zVIPCore.Database.GetPlayerSmokeColorAsync(steamId);
-        if (!string.IsNullOrEmpty(color))
-        {
-            _playerSmokeColors[steamId] = color;
-        }
+        return zVIPCore.Database.GetSmokeColorCached(steamId);
     }
 }
