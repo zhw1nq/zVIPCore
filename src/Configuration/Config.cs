@@ -874,7 +874,7 @@ public class ParticlesConfig
 public class LongJumpConfig
 {
     [JsonPropertyName("jump_boost")]
-    public float JumpBoost { get; set; } = 1.0f;
+    public float JumpBoost { get; set; } = 2.25f;
 
     [JsonPropertyName("only_apply_force_in_z_axis")]
     public bool OnlyApplyForceInZAxis { get; set; } = false;
@@ -889,11 +889,11 @@ public class DoubleJumpConfig
     public int JumpsCount { get; set; } = 2;
 
     [JsonPropertyName("velocity")]
-    public float Velocity { get; set; } = 250f;
+    public float Velocity { get; set; } = 275f;
 
     [JsonPropertyName("allow_instant_jump")]
     public bool AllowInstantJump { get; set; } = true;
 
     [JsonPropertyName("admin_flag")]
-    public string AdminFlag { get; set; } = "@css/tgs-vip";
+    public string AdminFlag { get; set; } = "@css/vip";
 }
