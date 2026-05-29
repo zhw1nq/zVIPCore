@@ -97,7 +97,10 @@ public class ModelManager
     {
         if (!IsValidPlayer(player)) return;
 
-        if (!IsModelSlotValid(model, player.Team))
+        // Re-check team at application time (player may have swapped during async)
+        var currentTeam = player.Team;
+
+        if (!IsModelSlotValid(model, currentTeam))
         {
             _ = zVIPCore.SafeAsync(async () =>
             {
@@ -111,22 +114,17 @@ public class ModelManager
             return;
         }
 
-        zVIPCore.Instance.AddTimer(0.1f, () =>
-        {
-            if (IsValidPlayer(player))
-                ApplyModel(player, model);
-        });
+        // Apply directly — already on main thread via NextFrame from caller
+        ApplyModel(player, model);
     }
 
     private static bool IsModelSlotValid(PlayerModelData model, CsTeam team)
     {
-        return model.Slot.ToUpperInvariant() switch
-        {
-            "ALL" => true,
-            "CT" => team == CsTeam.CounterTerrorist,
-            "T" => team == CsTeam.Terrorist,
-            _ => false
-        };
+        var slot = model.Slot;
+        if (string.Equals(slot, "ALL", StringComparison.OrdinalIgnoreCase)) return true;
+        if (string.Equals(slot, "CT", StringComparison.OrdinalIgnoreCase)) return team == CsTeam.CounterTerrorist;
+        if (string.Equals(slot, "T", StringComparison.OrdinalIgnoreCase)) return team == CsTeam.Terrorist;
+        return false;
     }
 
     private static bool IsValidPlayer(CCSPlayerController? player) =>
