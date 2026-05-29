@@ -54,6 +54,12 @@ public partial class Config
     [JsonPropertyName("particles")]
     public ParticlesConfig Particles { get; set; } = new();
 
+    [JsonPropertyName("longjump")]
+    public LongJumpConfig LongJump { get; set; } = new();
+
+    [JsonPropertyName("doublejump")]
+    public DoubleJumpConfig DoubleJump { get; set; } = new();
+
     public static Config Load(string moduleDirectory)
     {
         var path = GetConfigPath(moduleDirectory);
@@ -167,6 +173,12 @@ public class ModulesConfig
 
     [JsonPropertyName("join_welcome_enabled")]
     public bool JoinWelcomeEnabled { get; set; } = true;
+
+    [JsonPropertyName("longjump_enabled")]
+    public bool LongJumpEnabled { get; set; } = true;
+
+    [JsonPropertyName("doublejump_enabled")]
+    public bool DoubleJumpEnabled { get; set; } = true;
 }
 
 // Player Models Config (zModels.json)
@@ -857,4 +869,31 @@ public class ParticlesConfig
 {
     [JsonPropertyName("default_duration_seconds")]
     public float DefaultDurationSeconds { get; set; } = 5.0f;
+}
+
+public class LongJumpConfig
+{
+    [JsonPropertyName("jump_boost")]
+    public float JumpBoost { get; set; } = 1.0f;
+
+    [JsonPropertyName("only_apply_force_in_z_axis")]
+    public bool OnlyApplyForceInZAxis { get; set; } = false;
+
+    [JsonPropertyName("admin_flag")]
+    public string AdminFlag { get; set; } = "@css/vip";
+}
+
+public class DoubleJumpConfig
+{
+    [JsonPropertyName("jumps_count")]
+    public int JumpsCount { get; set; } = 2;
+
+    [JsonPropertyName("velocity")]
+    public float Velocity { get; set; } = 250f;
+
+    [JsonPropertyName("allow_instant_jump")]
+    public bool AllowInstantJump { get; set; } = true;
+
+    [JsonPropertyName("admin_flag")]
+    public string AdminFlag { get; set; } = "@css/tgs-vip";
 }

@@ -25,6 +25,8 @@ public class zVIPCore : BasePlugin
     public static KillStreakManager KillStreakManager { get; private set; } = null!;
     public static ParticleManager ParticleManager { get; private set; } = null!;
     public static JoinWelcomeManager JoinWelcomeManager { get; private set; } = null!;
+    public static LongJumpManager LongJumpManager { get; private set; } = null!;
+    public static DoubleJumpManager DoubleJumpManager { get; private set; } = null!;
     public static MvpSettingsConfig MvpSettings { get; set; } = new();
 
 
@@ -114,6 +116,19 @@ public class zVIPCore : BasePlugin
             RegisterEventHandler<EventPlayerDisconnect>(JoinWelcomeManager.OnPlayerDisconnect);
         }
 
+        if (Config.Modules.LongJumpEnabled)
+        {
+            LongJumpManager = new LongJumpManager();
+            LongJumpManager.Load();
+            RegisterEventHandler<EventPlayerJump>(LongJumpManager.OnPlayerJump);
+        }
+
+        if (Config.Modules.DoubleJumpEnabled)
+        {
+            DoubleJumpManager = new DoubleJumpManager();
+            RegisterListener<Listeners.OnTick>(DoubleJumpManager.OnTick);
+        }
+
         RegisterListener<Listeners.OnServerPrecacheResources>(manifest =>
         {
             if (Config.Modules.KillStreakEnabled && !string.IsNullOrEmpty(Config.KillStreak.SoundEventPath))
@@ -135,6 +150,8 @@ public class zVIPCore : BasePlugin
         // Map start config reload
         RegisterListener<Listeners.OnMapStart>(mapName =>
         {
+            DoubleJumpManager?.OnMapStart();
+
             if (Config.Modules.PlayerModelsEnabled)
             {
                 var newPlayerModels = PlayerModelsConfig.Load(ModuleDirectory);
@@ -675,6 +692,7 @@ public class zVIPCore : BasePlugin
         WeaponManager?.ClearPlayerData(steamId);
         SmokeManager?.ClearPlayerData(steamId);
         KillStreakManager?.OnPlayerDisconnect(player);
+        DoubleJumpManager?.OnPlayerDisconnect(player);
         _reloadTracking.TryRemove(steamId, out _);
 
         return HookResult.Continue;
