@@ -73,9 +73,10 @@ public class WeaponManager
         var team = GetTeamString(player.Team);
         var weaponDesignerName = GetDesignerName(weapon);
 
-        if (_playerWeapons.TryGetValue((steamId, team), out var weapons))
+        var weapons = _playerWeapons.GetOrAdd((steamId, team), _ => new ConcurrentDictionary<string, string>());
+        if (weapons.TryGetValue(weaponDesignerName, out var modelId))
         {
-            if (weapons.TryGetValue(weaponDesignerName, out var modelId))
+            if (!string.IsNullOrEmpty(modelId) && modelId != "default")
             {
                 var modelData = _modelsConfig.FindModelByUniqueId(modelId);
                 if (modelData != null)
@@ -88,7 +89,7 @@ public class WeaponManager
                     }
                 }
             }
-            // Player's weapons are cached but no custom skin for this weapon → reset to default
+            // Cached as default or invalid skin → reset to default
             ResetSubclass(weapon);
         }
         else
@@ -106,6 +107,7 @@ public class WeaponManager
 
         if (modelId == null)
         {
+            weapons[weaponName] = "default";
             // Player has no custom weapon for this type → reset any existing custom subclass
             Server.NextFrame(() =>
             {
@@ -120,6 +122,7 @@ public class WeaponManager
         var modelData = _modelsConfig.FindModelByUniqueId(modelId);
         if (modelData == null)
         {
+            weapons[weaponName] = "default";
             await zVIPCore.Database.RemovePlayerWeaponAsync(steamId, weaponName, team);
             Server.NextFrame(() =>
             {
@@ -132,6 +135,7 @@ public class WeaponManager
         var subclass = modelData.GetSubclassName();
         if (string.IsNullOrEmpty(subclass) || !weaponName.Equals(modelData.WeaponType, StringComparison.Ordinal))
         {
+            weapons[weaponName] = "default";
             Server.NextFrame(() =>
             {
                 if (player.IsValid && weapon?.IsValid == true)
@@ -167,6 +171,7 @@ public class WeaponManager
     {
         if (!_playerWeapons.TryGetValue((steamId, team), out var weapons)) return null;
         if (!weapons.TryGetValue(weaponType, out var modelId)) return null;
+        if (modelId == "default") return null;
         return _modelsConfig.FindModelByUniqueId(modelId);
     }
 
@@ -174,7 +179,7 @@ public class WeaponManager
     {
         var weapons = _playerWeapons.GetOrAdd((steamId, team), _ => new ConcurrentDictionary<string, string>());
         if (modelId == null)
-            weapons.TryRemove(weaponName, out _);
+            weapons[weaponName] = "default";
         else
             weapons[weaponName] = modelId;
     }
@@ -222,6 +227,14 @@ public class WeaponManager
     {
         if (!OldSubclassByHandle.TryGetValue(weapon.Handle, out var oldSubclass) || string.IsNullOrEmpty(oldSubclass))
             return;
+
+        var currentDesignerName = GetDesignerName(weapon);
+        if (oldSubclass != currentDesignerName)
+        {
+            // The handle was recycled from a different weapon type! Clean it up without resetting.
+            OldSubclassByHandle.TryRemove(weapon.Handle, out _);
+            return;
+        }
 
         weapon.AcceptInput("ChangeSubclass", weapon, weapon, oldSubclass);
         OldSubclassByHandle.TryRemove(weapon.Handle, out _);
