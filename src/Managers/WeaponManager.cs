@@ -73,18 +73,23 @@ public class WeaponManager
         var team = GetTeamString(player.Team);
         var weaponDesignerName = GetDesignerName(weapon);
 
-        if (_playerWeapons.TryGetValue((steamId, team), out var weapons) &&
-            weapons.TryGetValue(weaponDesignerName, out var modelId))
+        if (_playerWeapons.TryGetValue((steamId, team), out var weapons))
         {
-            var modelData = _modelsConfig.FindModelByUniqueId(modelId);
-            if (modelData != null)
+            if (weapons.TryGetValue(weaponDesignerName, out var modelId))
             {
-                var subclass = modelData.GetSubclassName();
-                if (!string.IsNullOrEmpty(subclass) && weaponDesignerName.Equals(modelData.WeaponType, StringComparison.Ordinal))
+                var modelData = _modelsConfig.FindModelByUniqueId(modelId);
+                if (modelData != null)
                 {
-                    SetSubclass(weapon, weaponDesignerName, subclass, modelData.Name);
+                    var subclass = modelData.GetSubclassName();
+                    if (!string.IsNullOrEmpty(subclass) && weaponDesignerName.Equals(modelData.WeaponType, StringComparison.Ordinal))
+                    {
+                        SetSubclass(weapon, weaponDesignerName, subclass, modelData.Name);
+                        return;
+                    }
                 }
             }
+            // Player's weapons are cached but no custom skin for this weapon → reset to default
+            ResetSubclass(weapon);
         }
         else
         {
@@ -95,28 +100,50 @@ public class WeaponManager
     private async Task LoadAndApplyWeaponSubclassAsync(ulong steamId, string team, CCSPlayerController player, CBasePlayerWeapon weapon, string weaponName)
     {
         var modelId = await zVIPCore.Database.GetPlayerWeaponAsync(steamId, weaponName, team);
-        if (modelId == null) return;
 
+        // Ensure cache entry exists so we don't re-query DB
         var weapons = _playerWeapons.GetOrAdd((steamId, team), _ => new ConcurrentDictionary<string, string>());
+
+        if (modelId == null)
+        {
+            // Player has no custom weapon for this type → reset any existing custom subclass
+            Server.NextFrame(() =>
+            {
+                if (player.IsValid && weapon?.IsValid == true)
+                    ResetSubclass(weapon);
+            });
+            return;
+        }
+
         weapons[weaponName] = modelId;
 
         var modelData = _modelsConfig.FindModelByUniqueId(modelId);
         if (modelData == null)
         {
             await zVIPCore.Database.RemovePlayerWeaponAsync(steamId, weaponName, team);
+            Server.NextFrame(() =>
+            {
+                if (player.IsValid && weapon?.IsValid == true)
+                    ResetSubclass(weapon);
+            });
             return;
         }
 
         var subclass = modelData.GetSubclassName();
-        if (string.IsNullOrEmpty(subclass)) return;
-        if (!weaponName.Equals(modelData.WeaponType, StringComparison.Ordinal)) return;
+        if (string.IsNullOrEmpty(subclass) || !weaponName.Equals(modelData.WeaponType, StringComparison.Ordinal))
+        {
+            Server.NextFrame(() =>
+            {
+                if (player.IsValid && weapon?.IsValid == true)
+                    ResetSubclass(weapon);
+            });
+            return;
+        }
 
         Server.NextFrame(() =>
         {
             if (player.IsValid && weapon?.IsValid == true)
-            {
                 SetSubclass(weapon, weaponName, subclass, modelData.Name);
-            }
         });
     }
 
@@ -180,8 +207,15 @@ public class WeaponManager
         OldSubclassByHandle[weapon.Handle] = oldSubclass;
         weapon.AcceptInput("ChangeSubclass", weapon, weapon, newSubclass);
 
+        // Set nametag on NextFrame to ensure it persists after subclass change
         if (!string.IsNullOrEmpty(customName))
-            weapon.AttributeManager.Item.CustomName = customName;
+        {
+            Server.NextFrame(() =>
+            {
+                if (weapon?.IsValid == true)
+                    weapon.AttributeManager.Item.CustomName = customName;
+            });
+        }
     }
 
     public static void ResetSubclass(CBasePlayerWeapon weapon)
@@ -191,6 +225,13 @@ public class WeaponManager
 
         weapon.AcceptInput("ChangeSubclass", weapon, weapon, oldSubclass);
         OldSubclassByHandle.TryRemove(weapon.Handle, out _);
+
+        // Clear nametag set by our plugin
+        Server.NextFrame(() =>
+        {
+            if (weapon?.IsValid == true)
+                weapon.AttributeManager.Item.CustomName = "";
+        });
     }
 
     public static void ClearSubclassCache()
