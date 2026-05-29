@@ -69,7 +69,7 @@ public class MvpManager
         zVIPCore.Instance.AddTimer(3.0f, () =>
         {
             var p = Utilities.GetPlayerFromSlot(slot);
-            if (p == null || !p.IsValid || p.Connected != PlayerConnectedState.PlayerConnected) return;
+            if (p == null || !p.IsValid) return;
             _ = Task.Run(async () =>
             {
                 await Database.GetPlayerMvpAsync(p.SteamID, "CT");
@@ -106,9 +106,6 @@ public class MvpManager
         var mvpPlayer = @event.Userid;
         if (mvpPlayer == null || !mvpPlayer.IsValid) return HookResult.Continue;
 
-        if (Config.Mvp.DisableDefaultMvp)
-            mvpPlayer.MVPs = 0;
-
         // Determine team of the MVP player
         var teamNum = mvpPlayer.TeamNum;
         var team = GetTeamString(teamNum);
@@ -119,13 +116,15 @@ public class MvpManager
         if (string.IsNullOrEmpty(mvpSound) || string.IsNullOrEmpty(mvpName))
         {
             var otherTeam = team == "CT" ? "T" : "CT";
-            var (fallbackName, fallbackSound) = Database.GetMvpFromCache(mvpPlayer.SteamID, otherTeam);
+            (mvpName, mvpSound) = Database.GetMvpFromCache(mvpPlayer.SteamID, otherTeam);
         }
 
         if (string.IsNullOrEmpty(mvpSound) || string.IsNullOrEmpty(mvpName))
             return HookResult.Continue;
 
-        info.DontBroadcast = true;
+        // Mute the default MVP music so our custom sound plays cleanly
+        if (Config.Mvp.MuteDefaultMvpSound)
+            info.DontBroadcast = true;
 
         MvpItemSettings? mvpSettings = null;
         string? mvpKey = null;
@@ -148,58 +147,55 @@ public class MvpManager
             return HookResult.Continue;
 
         var localizer = zVIPCore.Instance.Localizer;
-        var timer = Config.Mvp;
+        var mvpConfig = Config.Mvp;
 
         // Emit sound ONCE on every player (self-to-self)
         // Non-positional via vsndevts: use_hrtf=0, distance_max=100000
         EmitSoundOnAllPlayers(mvpSound);
 
-        // Prepare HTML message once (outside player loop)
-        string? htmlMsg = null;
-        if (mvpSettings.ShowHtmlMessage)
+        // Chat message (skip if globally hidden)
+        if (!mvpConfig.HideChat && mvpSettings.ShowChatMessage)
         {
-            htmlMsg = GetLocalizedMessage(mvpKey, "html");
-            if (htmlMsg != null)
-                htmlMsg = string.Format(htmlMsg, mvpPlayer.PlayerName, mvpSettings.MVPName);
-        }
-
-        foreach (var p in Utilities.GetPlayers().Where(p => p.IsValid && !p.IsBot && !p.IsHLTV))
-        {
-            if (mvpSettings.ShowChatMessage)
+            var msg = GetLocalizedMessage(mvpKey, "chat");
+            if (msg != null)
             {
-                var msg = GetLocalizedMessage(mvpKey, "chat");
-                if (msg != null)
-                    p.PrintToChat(localizer["zVIPCore.prefix"] + string.Format(msg, mvpPlayer.PlayerName, mvpSettings.MVPName));
+                var formatted = localizer["zVIPCore.prefix"] + string.Format(msg, mvpPlayer.PlayerName, mvpSettings.MVPName);
+                foreach (var p in Utilities.GetPlayers().Where(p => p.IsValid && !p.IsBot && !p.IsHLTV))
+                    p.PrintToChat(formatted);
             }
         }
 
-        // Setup center HTML display (once, not per-player)
-        if (htmlMsg != null)
+        // HTML message (skip if globally hidden)
+        if (!mvpConfig.HideHtml && mvpSettings.ShowHtmlMessage)
         {
-            _htmlMessage = htmlMsg;
-            _isCenterHtmlActive = true;
-            _centerHtmlTimer?.Kill();
-            _centerHtmlTimer = zVIPCore.Instance.AddTimer(timer.CenterHtmlDuration, () =>
+            var htmlMsg = GetLocalizedMessage(mvpKey, "html");
+            if (htmlMsg != null)
             {
-                _isCenterHtmlActive = false;
-                _centerHtmlTimer = null;
-                _centerHtmlTickTimer?.Kill();
-                _centerHtmlTickTimer = null;
-            });
-
-            _centerHtmlTickTimer?.Kill();
-            _centerHtmlTickTimer = zVIPCore.Instance.AddTimer(0.1f, () =>
-            {
-                if (!_isCenterHtmlActive)
+                _htmlMessage = string.Format(htmlMsg, mvpPlayer.PlayerName, mvpSettings.MVPName);
+                _isCenterHtmlActive = true;
+                _centerHtmlTimer?.Kill();
+                _centerHtmlTimer = zVIPCore.Instance.AddTimer(mvpConfig.CenterHtmlDuration, () =>
                 {
+                    _isCenterHtmlActive = false;
+                    _centerHtmlTimer = null;
                     _centerHtmlTickTimer?.Kill();
                     _centerHtmlTickTimer = null;
-                    return;
-                }
+                });
 
-                foreach (var p in Utilities.GetPlayers().Where(p => p.IsValid && !p.IsBot && !p.IsHLTV))
-                    p.PrintToCenterHtml($"{_htmlMessage}</div>");
-            }, TimerFlags.REPEAT);
+                _centerHtmlTickTimer?.Kill();
+                _centerHtmlTickTimer = zVIPCore.Instance.AddTimer(0.1f, () =>
+                {
+                    if (!_isCenterHtmlActive)
+                    {
+                        _centerHtmlTickTimer?.Kill();
+                        _centerHtmlTickTimer = null;
+                        return;
+                    }
+
+                    foreach (var p in Utilities.GetPlayers().Where(p => p.IsValid && !p.IsBot && !p.IsHLTV))
+                        p.PrintToCenterHtml($"{_htmlMessage}</div>");
+                }, TimerFlags.REPEAT);
+            }
         }
 
         return HookResult.Continue;
