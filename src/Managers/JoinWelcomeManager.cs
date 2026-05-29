@@ -2,8 +2,10 @@ using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Modules.Admin;
 using CounterStrikeSharp.API.Modules.Utils;
+using CounterStrikeSharp.API.Modules.Timers;
 using System.Collections.Generic;
 using System.Linq;
+using Timer = CounterStrikeSharp.API.Modules.Timers.Timer;
 
 namespace zVIPCore;
 
@@ -11,26 +13,11 @@ public class JoinWelcomeManager
 {
     private readonly HashSet<ulong> _welcomedPlayers = new();
     private readonly List<(string Message, float StartTime, float Duration)> _activeMessages = new();
+    private Timer? _centerHtmlTickTimer = null;
 
     public void OnTick()
     {
-        // 1. Process active messages duration and tick display
-        if (_activeMessages.Count > 0)
-        {
-            float currentTime = Server.CurrentTime;
-            _activeMessages.RemoveAll(msg => currentTime - msg.StartTime >= msg.Duration);
-
-            if (_activeMessages.Count > 0)
-            {
-                var combinedMessage = string.Join("<br>", _activeMessages.Select(m => m.Message));
-                foreach (var p in Utilities.GetPlayers().Where(p => p.IsValid && !p.IsBot && !p.IsHLTV))
-                {
-                    p.PrintToCenterHtml(combinedMessage);
-                }
-            }
-        }
-
-        // 2. Check for newly joined VIP players that should be welcomed
+        // Check for newly joined VIP players that should be welcomed
         foreach (var player in Utilities.GetPlayers())
         {
             if (player == null || !player.IsValid || player.IsBot) continue;
@@ -72,8 +59,10 @@ public class JoinWelcomeManager
                 _welcomedPlayers.Add(steamId);
                 
                 // Add to active repeating rendering queue
-                float duration = zVIPCore.Config.CenterHtmlDuration;
+                float duration = 2.0f;
                 _activeMessages.Add((welcomeMessage, Server.CurrentTime, duration));
+
+                StartHtmlTimerIfNeeded();
 
                 var soundPath = zVIPCore.Config.JoinWelcome.SoundPath;
                 if (!string.IsNullOrEmpty(soundPath))
@@ -114,8 +103,10 @@ public class JoinWelcomeManager
 
             if (leaveMessage != null)
             {
-                float duration = zVIPCore.Config.CenterHtmlDuration;
+                float duration = 2.0f;
                 _activeMessages.Add((leaveMessage, Server.CurrentTime, duration));
+
+                StartHtmlTimerIfNeeded();
 
                 var soundPath = zVIPCore.Config.JoinWelcome.SoundPath;
                 if (!string.IsNullOrEmpty(soundPath))
@@ -126,6 +117,38 @@ public class JoinWelcomeManager
         }
 
         return HookResult.Continue;
+    }
+
+    private void StartHtmlTimerIfNeeded()
+    {
+        if (_centerHtmlTickTimer == null)
+        {
+            _centerHtmlTickTimer = zVIPCore.Instance.AddTimer(0.1f, OnTickWelcomeHtml, TimerFlags.REPEAT);
+        }
+    }
+
+    private void OnTickWelcomeHtml()
+    {
+        float currentTime = Server.CurrentTime;
+        _activeMessages.RemoveAll(msg => currentTime - msg.StartTime >= msg.Duration);
+
+        if (_activeMessages.Count > 0)
+        {
+            var combinedMessage = string.Join("<br>", _activeMessages.Select(m => m.Message));
+            foreach (var p in Utilities.GetPlayers().Where(p => p.IsValid && !p.IsBot && !p.IsHLTV))
+            {
+                p.PrintToCenterHtml(combinedMessage);
+            }
+        }
+        else
+        {
+            foreach (var p in Utilities.GetPlayers().Where(p => p.IsValid && !p.IsBot && !p.IsHLTV))
+            {
+                p.PrintToCenterHtml("");
+            }
+            _centerHtmlTickTimer?.Kill();
+            _centerHtmlTickTimer = null;
+        }
     }
 
     private static void PlaySoundOnAllPlayers(string soundName)
