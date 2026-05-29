@@ -6,13 +6,13 @@
   "zVIPCore.website_message": "{green}Truy cập website: {yellow}{0}",
   "zVIPCore.cooldown_remaining": "{darkred}Vui lòng đợi {yellow}{0}{darkred} giây trước khi reload.",
   "zVIPCore.kick_reason_spam": "Spam lệnh",
-  "zVIPCore.sound_enabled": "{green}Âm thanh vũ khí custom {yellow}đã bật{green}.",
-  "zVIPCore.sound_disabled": "{yellow}Âm thanh vũ khí custom {red}đã tắt{yellow}.",
   "zVIPCore.web_reload_success": "{green}Đã tải lại cấu hình thành công.",
   "mvp.default.chat": "{red}{0}{silver} CHƯA TÀY ĐÂU !! Đang phát: {blue}{1}{silver}.",
   "mvp.default.html": "<font color='red'>{0}</font> CHƯA TÀY ĐÂU !!<br><img src='https://cdn.vhming.com/mvp.jpg'></img>",
   "mvp.1.chat": "{red}{0}{silver} CHƯA TÀY ĐÂU !! Đang phát: {blue}{1}{silver}.",
   "mvp.1.html": "<font color='red'>{0}</font> CHƯA TÀY ĐÂU !!<br><img src='https://cdn.vhming.com/mvp.jpg'></img>",
   "mvp.2.chat": "{red}{0}{silver} CHƯA TÀY ĐÂU !! Đang phát: {blue}{1}{silver}.",
-  "mvp.2.html": "<font color='red'>{0}</font> CHƯA TÀY ĐÂU !!<br><img src='https://cdn.vhming.com/mvp.jpg'></img>"
+  "mvp.2.html": "<font color='red'>{0}</font> CHƯA TÀY ĐÂU !!<br><img src='https://cdn.vhming.com/mvp.jpg'></img>",
+  "killstreak.kill_info": "<br><font class='fontSize-m' color='red'>Đã hạ</font> <font class='fontSize-m' color='lime'>{0}</font> <font class='fontSize-m' color='gold'>[{1}]</font>",
+  "killstreak.kill_chat": "{green}{0} {silver}đã hạ gục {red}{1} {silver}bằng {gold}{2} {silver}- Số mạng: {red}{3}"
 }

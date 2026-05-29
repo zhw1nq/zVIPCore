@@ -33,9 +33,6 @@ public partial class Config
     [JsonPropertyName("center_html_duration")]
     public float CenterHtmlDuration { get; set; } = 7.0f;
 
-    [JsonPropertyName("restrict_permission")]
-    public string RestrictPermission { get; set; } = "";
-
     [JsonPropertyName("reload_cooldown_seconds")]
     public float ReloadCooldownSeconds { get; set; } = 120.0f;
 
@@ -45,11 +42,11 @@ public partial class Config
     [JsonPropertyName("anti_spam_window_seconds")]
     public float AntiSpamWindowSeconds { get; set; } = 15.0f;
 
-    [JsonPropertyName("sound")]
-    public SoundConfig SoundConfig { get; set; } = new();
-
     [JsonPropertyName("mvp")]
     public MvpConfig Mvp { get; set; } = new();
+
+    [JsonPropertyName("killstreak")]
+    public KillStreakConfig KillStreak { get; set; } = new();
 
     public static Config Load(string moduleDirectory)
     {
@@ -153,11 +150,11 @@ public class ModulesConfig
     [JsonPropertyName("smokes_enabled")]
     public bool SmokesEnabled { get; set; } = true;
 
-    [JsonPropertyName("sounds_enabled")]
-    public bool SoundsEnabled { get; set; } = true;
-
     [JsonPropertyName("mvp_enabled")]
     public bool MvpEnabled { get; set; } = true;
+
+    [JsonPropertyName("killstreak_enabled")]
+    public bool KillStreakEnabled { get; set; } = true;
 }
 
 // Player Models Config (zModels.json)
@@ -502,11 +499,7 @@ public class WeaponModelData
     [JsonPropertyName("image_gun")]
     public string ImageGun { get; set; } = "";
 
-    [JsonPropertyName("sound_event")]
-    public string SoundEvent { get; set; } = "";
 
-    [JsonPropertyName("sound_event_unsilenced")]
-    public string SoundEventUnsilenced { get; set; } = "";
 
     [JsonIgnore]
     public string WeaponType { get; set; } = "";
@@ -526,45 +519,71 @@ public class WeaponModelData
     }
 }
 
-// Sound Config
-public class SoundConfig
-{
-    [JsonPropertyName("enabled")]
-    public bool Enabled { get; set; } = true;
-
-    [JsonPropertyName("force_mute_all_firebullets")]
-    public bool ForceMuteAllFireBullets { get; set; } = false;
-
-    [JsonPropertyName("custom_sound_default_enabled")]
-    public bool CustomSoundDefaultEnabled { get; set; } = true;
-
-    [JsonPropertyName("official_overrides")]
-    public List<OfficialSoundOverride> OfficialOverrides { get; set; } = new();
-}
-
-public class OfficialSoundOverride
-{
-    [JsonPropertyName("item_def_index")]
-    public int ItemDefIndex { get; set; }
-
-    [JsonPropertyName("target_event")]
-    public string TargetEvent { get; set; } = "";
-
-    [JsonPropertyName("target_event_unsilenced")]
-    public string TargetEventUnsilenced { get; set; } = "";
-}
-
 // MVP Config
 public class MvpConfig
 {
-    [JsonPropertyName("disable_default_mvp")]
-    public bool DisableDefaultMvp { get; set; } = true;
+    [JsonPropertyName("mute_default_mvp_sound")]
+    public bool MuteDefaultMvpSound { get; set; } = true;
+
+    [JsonPropertyName("hide_chat")]
+    public bool HideChat { get; set; } = false;
+
+    [JsonPropertyName("hide_html")]
+    public bool HideHtml { get; set; } = false;
 
     [JsonPropertyName("center_html_duration")]
-    public int CenterHtmlDuration { get; set; } = 7;
+    public int CenterHtmlDuration { get; set; } = 6;
 
     [JsonPropertyName("sound_duration")]
-    public float SoundDuration { get; set; } = 10.0f;
+    public float SoundDuration { get; set; } = 8.0f;
+}
+
+// KillStreak Config
+public class KillStreakConfig
+{
+    [JsonPropertyName("show_kill_info")]
+    public bool ShowKillInfo { get; set; } = true;
+
+    [JsonPropertyName("loop_if_kill_icons_end")]
+    public bool LoopIfKillIconsEnd { get; set; } = true;
+
+    [JsonPropertyName("sound_event_path")]
+    public string SoundEventPath { get; set; } = "soundevents/killstreak_soundevent.vsndevts";
+
+    [JsonPropertyName("sound_volume")]
+    public float SoundVolume { get; set; } = 1.0f;
+
+    [JsonPropertyName("kill_icons")]
+    public Dictionary<int, KillStreakIconsSettings> KillIcons { get; set; } = new()
+    {
+        { 1, new KillStreakIconsSettings { Icon = "<img src='https://cdn.zhw1nq.com/killstreak/kill1.png'>", Sound = "Kill.Sound_01", Duration = 3.0f } },
+        { 2, new KillStreakIconsSettings { Icon = "<img src='https://cdn.zhw1nq.com/killstreak/kill2.png'>", Sound = "Kill.Sound_02", Duration = 3.0f } },
+        { 3, new KillStreakIconsSettings { Icon = "<img src='https://cdn.zhw1nq.com/killstreak/kill3.png'>", Sound = "Kill.Sound_03", Duration = 3.0f } },
+        { 4, new KillStreakIconsSettings { Icon = "<img src='https://cdn.zhw1nq.com/killstreak/kill4.png'>", Sound = "Kill.Sound_04", Duration = 3.0f } },
+        { 5, new KillStreakIconsSettings { Icon = "<img src='https://cdn.zhw1nq.com/killstreak/kill5.png'>", Sound = "Kill.Sound_05", Duration = 5.5f, EnableChatNotification = true, BroadcastSoundToAll = true } },
+        { 6, new KillStreakIconsSettings { Icon = "<img src='https://cdn.zhw1nq.com/killstreak/kill6.png'>", Sound = "Kill.Sound_06", Duration = 5.5f, EnableChatNotification = true, BroadcastSoundToAll = true } },
+    };
+}
+
+public class KillStreakIconsSettings
+{
+    [JsonPropertyName("icon")]
+    public string Icon { get; set; } = "";
+
+    [JsonPropertyName("sound")]
+    public string Sound { get; set; } = "";
+
+    [JsonPropertyName("duration")]
+    public float Duration { get; set; } = 3.0f;
+
+    [JsonPropertyName("enable_chat_notification")]
+    public bool EnableChatNotification { get; set; } = false;
+
+    [JsonPropertyName("broadcast_sound_to_all")]
+    public bool BroadcastSoundToAll { get; set; } = false;
+
+    [JsonPropertyName("html_kill_all")]
+    public string HTMLKillAll { get; set; } = "";
 }
 
 // MVP Settings Config (zMVP.json)
