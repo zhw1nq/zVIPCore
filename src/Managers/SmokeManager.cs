@@ -1,5 +1,6 @@
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
+using CounterStrikeSharp.API.Modules.Utils;
 using System.Collections.Concurrent;
 using System.Globalization;
 
@@ -23,12 +24,13 @@ public class SmokeManager
             if (!grenade.IsValid)
                 return;
 
-            var player = grenade.Thrower.Value?.Controller.Value;
-            if (player == null)
+            var player = grenade.Thrower.Value?.Controller.Value as CCSPlayerController;
+            if (player == null || !player.IsValid)
                 return;
 
             var steamId = player.SteamID;
-            var color = zVIPCore.Database.GetSmokeColorCached(steamId);
+            var team = GetTeamString(player.Team);
+            var color = zVIPCore.Database.GetSmokeColorCached(steamId, team);
             if (string.IsNullOrEmpty(color))
                 return;
 
@@ -63,9 +65,9 @@ public class SmokeManager
         }
     }
 
-    public void SetPlayerSmokeColor(ulong steamId, string color)
+    public void SetPlayerSmokeColor(ulong steamId, string team, string color)
     {
-        _ = zVIPCore.Database.SavePlayerSmokeColorAsync(steamId, color);
+        _ = zVIPCore.Database.SavePlayerSmokeColorAsync(steamId, team, color);
     }
 
     public void ClearPlayerData(ulong steamId)
@@ -73,8 +75,11 @@ public class SmokeManager
         // Handled by Database.ClearPlayerCache
     }
 
-    public string? GetPlayerSmokeColor(ulong steamId)
+    public string? GetPlayerSmokeColor(ulong steamId, string team)
     {
-        return zVIPCore.Database.GetSmokeColorCached(steamId);
+        return zVIPCore.Database.GetSmokeColorCached(steamId, team);
     }
+
+    private static string GetTeamString(CsTeam team) =>
+        team == CsTeam.CounterTerrorist ? "CT" : "T";
 }

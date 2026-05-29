@@ -11,8 +11,7 @@ public class Database : IDisposable
     private readonly string _connectionString;
     private readonly ConcurrentDictionary<(ulong, CsTeam), string> _modelCache = new();
     private readonly ConcurrentDictionary<(ulong SteamId, string WeaponType, string Team), string> _weaponCache = new();
-    private readonly ConcurrentDictionary<ulong, string> _smokeCache = new();
-    private readonly ConcurrentDictionary<ulong, bool> _soundEnabledCache = new();
+    private readonly ConcurrentDictionary<(ulong SteamId, string Team), string> _smokeCache = new();
     private readonly ConcurrentDictionary<(ulong, string), MvpPlayerData> _mvpCache = new();
     private readonly ConcurrentDictionary<(ulong, string), bool> _mvpDirty = new();
     private bool _disposed;
@@ -54,15 +53,12 @@ public class Database : IDisposable
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
             CREATE TABLE IF NOT EXISTS zSmokeColors (
-                steamid BIGINT UNSIGNED PRIMARY KEY,
+                steamid BIGINT UNSIGNED NOT NULL,
+                team VARCHAR(2) NOT NULL DEFAULT 'CT',
                 color VARCHAR(32) NOT NULL,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
-            CREATE TABLE IF NOT EXISTS zSoundSettings (
-                steamid BIGINT UNSIGNED PRIMARY KEY,
-                enabled TINYINT(1) NOT NULL DEFAULT 1,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY (steamid, team),
+                INDEX idx_steamid (steamid)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
             CREATE TABLE IF NOT EXISTS zMVP (
@@ -81,6 +77,7 @@ public class Database : IDisposable
 
         // Auto-migration: add team column if table already exists without it
         await MigrateWeaponEquipmentsTeamAsync(conn);
+        await MigrateSmokeColorsTeamAsync(conn);
     }
 
     private static async Task MigrateWeaponEquipmentsTeamAsync(MySqlConnection conn)
@@ -119,6 +116,44 @@ public class Database : IDisposable
         catch (Exception ex)
         {
             Console.WriteLine($"[zVIPCore] Warning: weapon team migration skipped: {ex.Message}");
+        }
+    }
+
+    private static async Task MigrateSmokeColorsTeamAsync(MySqlConnection conn)
+    {
+        try
+        {
+            await using var checkCmd = new MySqlCommand(
+                "SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'zSmokeColors' AND COLUMN_NAME = 'team'", conn);
+            var exists = Convert.ToInt32(await checkCmd.ExecuteScalarAsync()) > 0;
+            if (exists) return;
+
+            Console.WriteLine("[zVIPCore] Migrating zSmokeColors: adding team column...");
+
+            // Add team column
+            await using var alterCmd = new MySqlCommand(
+                "ALTER TABLE zSmokeColors ADD COLUMN team VARCHAR(2) NOT NULL DEFAULT 'CT' AFTER steamid", conn);
+            await alterCmd.ExecuteNonQueryAsync();
+
+            // Drop old PK and add new composite PK
+            try
+            {
+                await using var pkCmd = new MySqlCommand(
+                    "ALTER TABLE zSmokeColors DROP PRIMARY KEY, ADD PRIMARY KEY (steamid, team)", conn);
+                await pkCmd.ExecuteNonQueryAsync();
+            }
+            catch { /* PK may already be correct */ }
+
+            // Duplicate CT rows as T rows
+            await using var dupCmd = new MySqlCommand(
+                "INSERT IGNORE INTO zSmokeColors (steamid, team, color) SELECT steamid, 'T', color FROM zSmokeColors WHERE team = 'CT'", conn);
+            var duplicated = await dupCmd.ExecuteNonQueryAsync();
+
+            Console.WriteLine($"[zVIPCore] Migration complete: duplicated {duplicated} smoke entries for T team");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[zVIPCore] Warning: smoke team migration skipped: {ex.Message}");
         }
     }
 
@@ -290,117 +325,69 @@ public class Database : IDisposable
 
     #region Smoke Colors
 
-    public async Task<string?> GetPlayerSmokeColorAsync(ulong steamId)
+    public async Task<string?> GetPlayerSmokeColorAsync(ulong steamId, string team)
     {
-        if (_smokeCache.TryGetValue(steamId, out var cached))
+        if (_smokeCache.TryGetValue((steamId, team), out var cached))
             return cached;
 
         await using var conn = new MySqlConnection(_connectionString);
         await conn.OpenAsync();
 
         await using var cmd = new MySqlCommand(
-            "SELECT color FROM zSmokeColors WHERE steamid = @steamid LIMIT 1", conn);
+            "SELECT color FROM zSmokeColors WHERE steamid = @steamid AND team = @team LIMIT 1", conn);
         cmd.Parameters.AddWithValue("@steamid", steamId);
+        cmd.Parameters.AddWithValue("@team", team);
 
         var result = await cmd.ExecuteScalarAsync();
         if (result is string color && !string.IsNullOrEmpty(color))
         {
-            _smokeCache[steamId] = color;
+            _smokeCache[(steamId, team)] = color;
             return color;
         }
 
         return null;
     }
 
-    public string? GetSmokeColorCached(ulong steamId)
+    public string? GetSmokeColorCached(ulong steamId, string team)
     {
-        return _smokeCache.TryGetValue(steamId, out var cached) ? cached : null;
+        return _smokeCache.TryGetValue((steamId, team), out var cached) ? cached : null;
     }
 
-    public async Task SavePlayerSmokeColorAsync(ulong steamId, string color)
+    public async Task SavePlayerSmokeColorAsync(ulong steamId, string team, string color)
     {
-        _smokeCache[steamId] = color;
+        _smokeCache[(steamId, team)] = color;
 
         await using var conn = new MySqlConnection(_connectionString);
         await conn.OpenAsync();
 
         await using var cmd = new MySqlCommand(@"
-            INSERT INTO zSmokeColors (steamid, color)
-            VALUES (@steamid, @color)
+            INSERT INTO zSmokeColors (steamid, team, color)
+            VALUES (@steamid, @team, @color)
             ON DUPLICATE KEY UPDATE color = @color", conn);
         cmd.Parameters.AddWithValue("@steamid", steamId);
+        cmd.Parameters.AddWithValue("@team", team);
         cmd.Parameters.AddWithValue("@color", color);
 
         await cmd.ExecuteNonQueryAsync();
     }
 
-    public async Task RemovePlayerSmokeColorAsync(ulong steamId)
+    public async Task RemovePlayerSmokeColorAsync(ulong steamId, string team)
     {
-        _smokeCache.TryRemove(steamId, out _);
+        _smokeCache.TryRemove((steamId, team), out _);
 
         await using var conn = new MySqlConnection(_connectionString);
         await conn.OpenAsync();
 
         await using var cmd = new MySqlCommand(
-            "DELETE FROM zSmokeColors WHERE steamid = @steamid", conn);
+            "DELETE FROM zSmokeColors WHERE steamid = @steamid AND team = @team", conn);
         cmd.Parameters.AddWithValue("@steamid", steamId);
+        cmd.Parameters.AddWithValue("@team", team);
 
         await cmd.ExecuteNonQueryAsync();
     }
 
     #endregion
 
-    #region Sound Settings
-
-    public async Task<bool> GetPlayerSoundEnabledAsync(ulong steamId)
-    {
-        if (_soundEnabledCache.TryGetValue(steamId, out var cached))
-            return cached;
-
-        await using var conn = new MySqlConnection(_connectionString);
-        await conn.OpenAsync();
-
-        await using var cmd = new MySqlCommand(
-            "SELECT enabled FROM zSoundSettings WHERE steamid = @steamid LIMIT 1", conn);
-        cmd.Parameters.AddWithValue("@steamid", steamId);
-
-        var result = await cmd.ExecuteScalarAsync();
-        if (result != null && result != DBNull.Value)
-        {
-            var enabled = Convert.ToBoolean(result);
-            _soundEnabledCache[steamId] = enabled;
-            return enabled;
-        }
-
-        _soundEnabledCache[steamId] = true;
-        return true;
-    }
-
-    public async Task SavePlayerSoundEnabledAsync(ulong steamId, bool enabled)
-    {
-        _soundEnabledCache[steamId] = enabled;
-
-        await using var conn = new MySqlConnection(_connectionString);
-        await conn.OpenAsync();
-
-        if (enabled)
-        {
-            await using var delCmd = new MySqlCommand(
-                "DELETE FROM zSoundSettings WHERE steamid = @steamid", conn);
-            delCmd.Parameters.AddWithValue("@steamid", steamId);
-            await delCmd.ExecuteNonQueryAsync();
-        }
-        else
-        {
-            await using var cmd = new MySqlCommand(@"
-                INSERT INTO zSoundSettings (steamid, enabled) VALUES (@steamid, 0)
-                ON DUPLICATE KEY UPDATE enabled = 0", conn);
-            cmd.Parameters.AddWithValue("@steamid", steamId);
-            await cmd.ExecuteNonQueryAsync();
-        }
-    }
-
-    #endregion
 
     #region MVP
 
@@ -576,27 +563,22 @@ public class Database : IDisposable
             }
         }
 
-        // 3. Smoke color
+        // 3. Smoke colors (CT + T)
         await using (var cmd = new MySqlCommand(
-            "SELECT color FROM zSmokeColors WHERE steamid = @steamid LIMIT 1", conn))
+            "SELECT team, color FROM zSmokeColors WHERE steamid = @steamid", conn))
         {
             cmd.Parameters.AddWithValue("@steamid", steamId);
-            var result = await cmd.ExecuteScalarAsync();
-            if (result is string color && !string.IsNullOrEmpty(color))
-                _smokeCache[steamId] = color;
+            await using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                var team = reader.GetString(0);
+                var color = reader.GetString(1);
+                if (!string.IsNullOrEmpty(color))
+                    _smokeCache[(steamId, team)] = color;
+            }
         }
 
-        // 4. Sound settings
-        await using (var cmd = new MySqlCommand(
-            "SELECT enabled FROM zSoundSettings WHERE steamid = @steamid LIMIT 1", conn))
-        {
-            cmd.Parameters.AddWithValue("@steamid", steamId);
-            var result = await cmd.ExecuteScalarAsync();
-            _soundEnabledCache[steamId] = result != null && result != DBNull.Value
-                ? Convert.ToBoolean(result) : true;
-        }
-
-        // 5. MVP preferences (CT + T)
+        // 4. MVP preferences (CT + T)
         await using (var cmd = new MySqlCommand(
             "SELECT team, mvp_name, mvp_sound FROM zMVP WHERE steam_id = @steamid", conn))
         {
@@ -624,8 +606,9 @@ public class Database : IDisposable
         foreach (var key in weaponKeys)
             _weaponCache.TryRemove(key, out _);
 
-        _smokeCache.TryRemove(steamId, out _);
-        _soundEnabledCache.TryRemove(steamId, out _);
+        var smokeKeys = _smokeCache.Keys.Where(k => k.SteamId == steamId).ToList();
+        foreach (var key in smokeKeys)
+            _smokeCache.TryRemove(key, out _);
         foreach (var t in new[] { "CT", "T" })
         {
             _mvpCache.TryRemove((steamId, t), out _);
@@ -650,7 +633,6 @@ public class Database : IDisposable
         _modelCache.Clear();
         _weaponCache.Clear();
         _smokeCache.Clear();
-        _soundEnabledCache.Clear();
         _mvpCache.Clear();
         _mvpDirty.Clear();
         MySqlConnection.ClearAllPools();
