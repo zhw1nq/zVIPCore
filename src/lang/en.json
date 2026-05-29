@@ -14,5 +14,13 @@
   "mvp.2.chat": "{red}{0}{default} is the MVP of the round! Playing: {blue}{1}{default}.",
   "mvp.2.html": "<font color='red'>{0}</font> IS the MVP of the round!<br><b color='white'>━━━━━━━━━━━━━━━━━━━━━━━━<</b>Playing: <font color='blue'>{1}</font>",
   "killstreak.kill_info": "<br><font class='fontSize-m' color='red'>Killed</font> <font class='fontSize-m' color='lime'>{0}</font> <font class='fontSize-m' color='gold'>[{1}]</font>",
-  "killstreak.kill_chat": "{green}{0} {silver}killed {red}{1} {silver}with {gold}{2} {silver}- Streak: {red}{3}"
+  "killstreak.kill_chat": "{green}{0} {silver}killed {red}{1} {silver}with {gold}{2} {silver}- Streak: {red}{3}",
+  "join_welcome.owner_join": "<font class='fontSize-m'><font color='#FF4500'><b>OWNER</b></font> » <b><font color='#FFD700'>{0}</font></b> - joined the server</font>",
+  "join_welcome.owner_leave": "<font class='fontSize-m'><font color='#FF4500'><b>OWNER</b></font> » <b><font color='#FFD700'>{0}</font></b> - left the server</font>",
+  "join_welcome.staff_join": "<font class='fontSize-m'><font color='#00BFFF'><b>STAFF</b></font> » <b><font color='#00FF00'>{0}</font></b> - joined the server</font>",
+  "join_welcome.staff_leave": "<font class='fontSize-m'><font color='#00BFFF'><b>STAFF</b></font> » <b><font color='#00FF00'>{0}</font></b> - left the server</font>",
+  "join_welcome.svip_join": "<font class='fontSize-m'><font color='#FF1493'><b>SVIP</b></font> » <b><font color='#FFFFFF'>{0}</font></b> - joined the server</font>",
+  "join_welcome.svip_leave": "<font class='fontSize-m'><font color='#FF1493'><b>SVIP</b></font> » <b><font color='#FFFFFF'>{0}</font></b> - left the server</font>",
+  "join_welcome.vip_join": "<font class='fontSize-m'><font color='#FF8C00'><b>VIP</b></font> » <b><font color='#FFFFFF'>{0}</font></b> - joined the server</font>",
+  "join_welcome.vip_leave": "<font class='fontSize-m'><font color='#FF8C00'><b>VIP</b></font> » <b><font color='#FFFFFF'>{0}</font></b> - left the server</font>"
 }

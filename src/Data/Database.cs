@@ -14,6 +14,7 @@ public class Database : IDisposable
     private readonly ConcurrentDictionary<(ulong SteamId, string Team), string> _smokeCache = new();
     private readonly ConcurrentDictionary<(ulong, string), MvpPlayerData> _mvpCache = new();
     private readonly ConcurrentDictionary<(ulong, string), bool> _mvpDirty = new();
+    private readonly ConcurrentDictionary<(ulong SteamId, string Team), string> _particleCache = new();
     private bool _disposed;
 
     public Database(DatabaseConfig config)
@@ -71,6 +72,15 @@ public class Database : IDisposable
                 PRIMARY KEY (steam_id, team),
                 INDEX idx_steam_id (steam_id)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+            CREATE TABLE IF NOT EXISTS zPlayerParticles (
+                steamid BIGINT UNSIGNED NOT NULL,
+                team VARCHAR(2) NOT NULL DEFAULT 'CT',
+                particle_path VARCHAR(255) NOT NULL,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY (steamid, team),
+                INDEX idx_steamid (steamid)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
             ", conn);
 
         await cmd.ExecuteNonQueryAsync();
@@ -388,6 +398,72 @@ public class Database : IDisposable
 
     #endregion
 
+    #region Player Particles
+
+    public async Task<string?> GetPlayerParticleAsync(ulong steamId, CsTeam team)
+    {
+        var teamStr = GetTeamString(team);
+        if (_particleCache.TryGetValue((steamId, teamStr), out var cached))
+            return cached;
+
+        await using var conn = new MySqlConnection(_connectionString);
+        await conn.OpenAsync();
+
+        await using var cmd = new MySqlCommand(
+            "SELECT particle_path FROM zPlayerParticles WHERE steamid = @steamid AND team = @team LIMIT 1", conn);
+        cmd.Parameters.AddWithValue("@steamid", steamId);
+        cmd.Parameters.AddWithValue("@team", teamStr);
+
+        var result = await cmd.ExecuteScalarAsync();
+        if (result is string path)
+        {
+            _particleCache[(steamId, teamStr)] = path;
+            return path;
+        }
+
+        return null;
+    }
+
+    public string? GetPlayerParticleCached(ulong steamId, string team)
+    {
+        return _particleCache.TryGetValue((steamId, team), out var cached) ? cached : null;
+    }
+
+    public async Task SavePlayerParticleAsync(ulong steamId, string team, string path)
+    {
+        _particleCache[(steamId, team)] = path;
+
+        await using var conn = new MySqlConnection(_connectionString);
+        await conn.OpenAsync();
+
+        await using var cmd = new MySqlCommand(@"
+            INSERT INTO zPlayerParticles (steamid, team, particle_path)
+            VALUES (@steamid, @team, @particle_path)
+            ON DUPLICATE KEY UPDATE particle_path = @particle_path", conn);
+        cmd.Parameters.AddWithValue("@steamid", steamId);
+        cmd.Parameters.AddWithValue("@team", team);
+        cmd.Parameters.AddWithValue("@particle_path", path);
+
+        await cmd.ExecuteNonQueryAsync();
+    }
+
+    public async Task RemovePlayerParticleAsync(ulong steamId, string team)
+    {
+        _particleCache.TryRemove((steamId, team), out _);
+
+        await using var conn = new MySqlConnection(_connectionString);
+        await conn.OpenAsync();
+
+        await using var cmd = new MySqlCommand(
+            "DELETE FROM zPlayerParticles WHERE steamid = @steamid AND team = @team", conn);
+        cmd.Parameters.AddWithValue("@steamid", steamId);
+        cmd.Parameters.AddWithValue("@team", team);
+
+        await cmd.ExecuteNonQueryAsync();
+    }
+
+    #endregion
+
 
     #region MVP
 
@@ -595,6 +671,20 @@ public class Database : IDisposable
             }
         }
 
+        // 5. Particles (CT + T)
+        await using (var cmd = new MySqlCommand(
+            "SELECT team, particle_path FROM zPlayerParticles WHERE steamid = @steamid", conn))
+        {
+            cmd.Parameters.AddWithValue("@steamid", steamId);
+            await using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                var team = reader.GetString(0);
+                var path = reader.GetString(1);
+                _particleCache[(steamId, team)] = path;
+            }
+        }
+
     }
 
     public void ClearPlayerCache(ulong steamId)
@@ -613,6 +703,7 @@ public class Database : IDisposable
         {
             _mvpCache.TryRemove((steamId, t), out _);
             _mvpDirty.TryRemove((steamId, t), out _);
+            _particleCache.TryRemove((steamId, t), out _);
         }
     }
 
@@ -635,6 +726,7 @@ public class Database : IDisposable
         _smokeCache.Clear();
         _mvpCache.Clear();
         _mvpDirty.Clear();
+        _particleCache.Clear();
         MySqlConnection.ClearAllPools();
 
         _disposed = true;

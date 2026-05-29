@@ -48,6 +48,12 @@ public partial class Config
     [JsonPropertyName("killstreak")]
     public KillStreakConfig KillStreak { get; set; } = new();
 
+    [JsonPropertyName("join_welcome")]
+    public JoinWelcomeConfig JoinWelcome { get; set; } = new();
+
+    [JsonPropertyName("particles")]
+    public ParticlesConfig Particles { get; set; } = new();
+
     public static Config Load(string moduleDirectory)
     {
         var path = GetConfigPath(moduleDirectory);
@@ -155,6 +161,12 @@ public class ModulesConfig
 
     [JsonPropertyName("killstreak_enabled")]
     public bool KillStreakEnabled { get; set; } = true;
+
+    [JsonPropertyName("particles_enabled")]
+    public bool ParticlesEnabled { get; set; } = true;
+
+    [JsonPropertyName("join_welcome_enabled")]
+    public bool JoinWelcomeEnabled { get; set; } = true;
 }
 
 // Player Models Config (zModels.json)
@@ -830,4 +842,19 @@ public static class MvpSettingsLoader
             }
         };
     }
+}
+
+public class JoinWelcomeConfig
+{
+    [JsonPropertyName("sound_event_path")]
+    public string SoundEventPath { get; set; } = "soundevents/ui_soundevent.vsndevts";
+
+    [JsonPropertyName("sound_path")]
+    public string SoundPath { get; set; } = "MenuUI_exit";
+}
+
+public class ParticlesConfig
+{
+    [JsonPropertyName("default_duration_seconds")]
+    public float DefaultDurationSeconds { get; set; } = 5.0f;
 }

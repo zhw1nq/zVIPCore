@@ -23,7 +23,8 @@ public class zVIPCore : BasePlugin
     public static SmokeManager SmokeManager { get; private set; } = null!;
     public static MvpManager MvpManager { get; private set; } = null!;
     public static KillStreakManager KillStreakManager { get; private set; } = null!;
-    public static DevParticlesManager DevParticlesManager { get; private set; } = null!;
+    public static ParticleManager ParticleManager { get; private set; } = null!;
+    public static JoinWelcomeManager JoinWelcomeManager { get; private set; } = null!;
     public static MvpSettingsConfig MvpSettings { get; set; } = new();
 
 
@@ -98,12 +99,29 @@ public class zVIPCore : BasePlugin
             RegisterEventHandler<EventPlayerSpawn>(KillStreakManager.OnPlayerSpawn);
             RegisterEventHandler<EventPlayerDeath>(KillStreakManager.OnPlayerDeath);
             RegisterListener<Listeners.OnTick>(KillStreakManager.OnTick);
-            RegisterListener<Listeners.OnServerPrecacheResources>(manifest =>
-            {
-                if (!string.IsNullOrEmpty(Config.KillStreak.SoundEventPath))
-                    manifest.AddResource(Config.KillStreak.SoundEventPath);
-            });
         }
+
+        if (Config.Modules.ParticlesEnabled)
+        {
+            ParticleManager = new ParticleManager();
+            RegisterEventHandler<EventPlayerSpawn>(ParticleManager.OnPlayerSpawn);
+        }
+
+        if (Config.Modules.JoinWelcomeEnabled)
+        {
+            JoinWelcomeManager = new JoinWelcomeManager();
+            RegisterListener<Listeners.OnTick>(JoinWelcomeManager.OnTick);
+            RegisterEventHandler<EventPlayerDisconnect>(JoinWelcomeManager.OnPlayerDisconnect);
+        }
+
+        RegisterListener<Listeners.OnServerPrecacheResources>(manifest =>
+        {
+            if (Config.Modules.KillStreakEnabled && !string.IsNullOrEmpty(Config.KillStreak.SoundEventPath))
+                manifest.AddResource(Config.KillStreak.SoundEventPath);
+
+            if (Config.Modules.JoinWelcomeEnabled && !string.IsNullOrEmpty(Config.JoinWelcome.SoundEventPath))
+                manifest.AddResource(Config.JoinWelcome.SoundEventPath);
+        });
 
         // Weapon/Smoke events
         if (Config.Modules.WeaponsEnabled || Config.Modules.SmokesEnabled)
@@ -186,11 +204,9 @@ public class zVIPCore : BasePlugin
             AddCommand($"css_{cmd}", "Open models website", Command_ModelsWebsite);
         }
 
-        // Dev tools: particle testing (@css/root only)
-        DevParticlesManager = new DevParticlesManager();
-        AddCommand("css_dev_spawnbot", "[DEV] Spawn a frozen bot for particle testing", DevParticlesManager.Command_SpawnBot);
-        AddCommand("css_dev_joinvpcf", "[DEV] Attach a particle effect to the test bot", DevParticlesManager.Command_JoinVpcf);
-        AddCommand("css_dev_clearbot", "[DEV] Remove test bot and all particles", DevParticlesManager.Command_ClearBot);
+        // Console-only: reload particle DB data for a player
+        if (Config.Modules.ParticlesEnabled)
+            AddCommand("css_zparticles", "Reload player particles from DB (Console only)", Command_ZParticles);
     }
 
     #region Console Commands: css_zmodels / css_zweapons
@@ -331,6 +347,42 @@ public class zVIPCore : BasePlugin
                     target.PrintToChat($"{Localizer["zVIPCore.prefix"]} {Localizer["zVIPCore.web_reload_success"]}");
                 }
                 Server.PrintToConsole($"[zVIPCore] Reloaded smoke data for {steamId}");
+            });
+        });
+    }
+
+    #endregion
+
+    #region Console Command: css_zparticles
+
+    private void Command_ZParticles(CCSPlayerController? player, CommandInfo info)
+    {
+        if (player != null) { PrintConsoleOnly(player); return; }
+
+        if (info.ArgCount < 3 || info.GetArg(1).ToLowerInvariant() != "reload")
+        {
+            Server.PrintToConsole("[zVIPCore] Usage: css_zparticles reload <steamid>");
+            return;
+        }
+
+        if (!ulong.TryParse(info.GetArg(2), out var steamId))
+        {
+            Server.PrintToConsole($"[zVIPCore] Invalid SteamID: {info.GetArg(2)}");
+            return;
+        }
+
+        Database.ClearPlayerCache(steamId);
+        _ = SafeAsync(async () =>
+        {
+            await Database.PreloadAllPlayerDataAsync(steamId);
+            Server.NextFrame(() =>
+            {
+                var target = FindPlayerBySteamId(steamId);
+                if (target != null)
+                {
+                    target.PrintToChat($"{Localizer["zVIPCore.prefix"]} {Localizer["zVIPCore.web_reload_success"]}");
+                }
+                Server.PrintToConsole($"[zVIPCore] Reloaded particles data for {steamId}");
             });
         });
     }
@@ -634,7 +686,6 @@ public class zVIPCore : BasePlugin
         Database?.Dispose();
         WeaponManager.ClearSubclassCache();
         KillStreakManager?.Clear();
-        DevParticlesManager?.Cleanup();
         _reloadTracking.Clear();
     }
 
